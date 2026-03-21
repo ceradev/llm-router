@@ -1,1 +1,93 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: Geist;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/Geist-Variable.woff2")
+    format("woff2");
+}
+
+@theme {
+  /* SF Pro en Apple. IBM Plex Sans ≈ SF en Windows/Linux (neutra, UI). Luego Inter, Geist y sistema. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "IBM Plex Sans", "Inter", "Geist",
+    ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  :root {
+    --bg-base: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --border-subtle: rgba(15, 23, 42, 0.12);
+    --surface-glass: rgba(15, 23, 42, 0.06);
+    --surface-glass-hover: rgba(15, 23, 42, 0.1);
+    /* Acentos (etiquetas, enlaces, violetas) */
+    --text-accent: #2563eb;
+    --text-accent-secondary: #5b21b6;
+    --text-accent-tertiary: #6d28d9;
+    /* Título hero en gradiente */
+    --headline-from: #64748b;
+    --headline-via: #0f172a;
+    --headline-to: #64748b;
+    --scrim: rgba(15, 23, 42, 0.45);
+    --shadow-elevated: 0 24px 80px rgba(15, 23, 42, 0.1);
+    --shadow-navbar: 0 8px 40px rgba(15, 23, 42, 0.08);
+    --shadow-drawer: -12px 0 48px rgba(15, 23, 42, 0.12);
+    --badge-bg: rgba(15, 23, 42, 0.07);
+    --segment-bg: rgba(15, 23, 42, 0.06);
+    --inset-highlight: rgba(15, 23, 42, 0.04);
+    --ring-focus: rgba(59, 130, 246, 0.55);
+    --ring-subtle: rgba(15, 23, 42, 0.2);
+    --shadow-prompt:
+      0 4px 14px rgba(59, 130, 246, 0.15), 0 18px 44px -8px rgba(59, 130, 246, 0.2),
+      inset 0 1px 0 var(--inset-highlight);
+    --shadow-prompt-focus:
+      0 0 0 4px rgba(59, 130, 246, 0.4), 0 0 48px rgba(59, 130, 246, 0.5),
+      0 20px 56px -8px rgba(59, 130, 246, 0.35), inset 0 1px 0 var(--inset-highlight);
+  }
+  .dark {
+    --bg-base: #0b0f1a;
+    --text-primary: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.5);
+    --border-subtle: rgba(255, 255, 255, 0.1);
+    --surface-glass: rgba(255, 255, 255, 0.05);
+    --surface-glass-hover: rgba(255, 255, 255, 0.08);
+    --text-accent: #93c5fd;
+    --text-accent-secondary: #c4b5fd;
+    --text-accent-tertiary: #a78bfa;
+    --headline-from: #999999;
+    --headline-via: #ffffff;
+    --headline-to: #999999;
+    --scrim: rgba(5, 8, 18, 0.55);
+    --shadow-elevated: 0 24px 80px rgba(0, 0, 0, 0.35);
+    --shadow-navbar: 0 8px 40px rgba(0, 0, 0, 0.25);
+    --shadow-drawer: -12px 0 48px rgba(0, 0, 0, 0.35);
+    --badge-bg: rgba(255, 255, 255, 0.1);
+    --segment-bg: rgba(0, 0, 0, 0.2);
+    --inset-highlight: rgba(255, 255, 255, 0.06);
+    --ring-focus: rgba(59, 130, 246, 0.8);
+    --ring-subtle: rgba(255, 255, 255, 0.3);
+    --shadow-prompt:
+      0 4px 16px rgba(59, 130, 246, 0.25), 0 20px 52px -10px rgba(59, 130, 246, 0.3),
+      inset 0 1px 0 var(--inset-highlight);
+    --shadow-prompt-focus:
+      0 0 0 4px rgba(59, 130, 246, 0.55), 0 0 56px rgba(59, 130, 246, 0.55),
+      0 24px 64px -10px rgba(59, 130, 246, 0.4), inset 0 1px 0 var(--inset-highlight);
+  }
+  html {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply min-h-dvh antialiased;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+}

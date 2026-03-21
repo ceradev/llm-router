@@ -12,6 +12,8 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@react-three/fiber": "^9.0.0",
+    "@shadergradient/react": "^2.4.20",
     "@astrojs/react": "^5.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
@@ -21,7 +23,13 @@
     "framer-motion": "^12.38.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "camera-controls": "^2.9.0",
+    "three": "^0.170.0",
+    "three-stdlib": "^2.35.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0"
   }
 }
