@@ -17,10 +17,7 @@ from app.gateway.fallback import FallbackExecutor, RoutingExhaustedError
 from app.gateway.orchestrator import GatewayOrchestrator
 from app.gateway.select import ModelSelector
 from app.gateway.types import GatewayTask
-from app.providers.anthropic.client import AnthropicClient
-from app.providers.deepseek.client import DeepSeekClient
-from app.providers.groq.client import GroqClient
-from app.providers.openai.client import OpenAIClient
+from app.providers.registry import build_provider_clients
 
 router = APIRouter(prefix="/v1", tags=["gateway"])
 
@@ -28,17 +25,11 @@ router = APIRouter(prefix="/v1", tags=["gateway"])
 @lru_cache
 def get_gateway_service() -> GatewayOrchestrator:
     registry = ModelRegistry()
-    providers = {
-        "openai": OpenAIClient(),
-        "anthropic": AnthropicClient(),
-        "groq": GroqClient(),
-        "deepseek": DeepSeekClient(),
-    }
     return GatewayOrchestrator(
         registry=registry,
         classifier=PromptClassifier(),
         selector=ModelSelector(registry),
-        executor=FallbackExecutor(providers),
+        executor=FallbackExecutor(build_provider_clients()),
     )
 
 

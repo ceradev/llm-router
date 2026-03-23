@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.catalog.types import Capability, ModelProfile
-from app.providers.groq.config import PROVIDER_NAME
+from app.providers.config.groq import PROVIDER_NAME
 
 
 def list_models() -> list[ModelProfile]:

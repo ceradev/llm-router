@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from app.gateway.types import Intent
 
+# This is a very naive implementation of a prompt classifier. It simply checks for the presence of certain keywords in the prompt to determine the intent.
+# In a real implementation, you would likely want to use a more sophisticated approach, such as training a machine learning model on a dataset of labeled prompts.
 CODE_HINTS = {
     "api",
     "bug",

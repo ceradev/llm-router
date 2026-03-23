@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.catalog.types import Capability, ModelProfile
-from app.providers.openai.config import PROVIDER_NAME
+from app.providers.config.openai import PROVIDER_NAME
 
 
 def list_models() -> list[ModelProfile]:

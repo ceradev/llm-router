@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from app.catalog.types import ModelProfile
 from app.gateway.types import ProviderResponse, RoutedRequest
-from app.providers.anthropic.config import PROVIDER_NAME
-from app.providers.anthropic.mapper import to_provider_response_content
-from app.providers.base import ProviderError
+from app.providers.base import ProviderError, build_demo_content
 
 
-class AnthropicClient:
-    name = PROVIDER_NAME
+class DemoProviderClient:
+    def __init__(self, provider_name: str) -> None:
+        self.name = provider_name
 
     def generate(
         self,
@@ -20,7 +19,7 @@ class AnthropicClient:
             raise ProviderError(f"Simulated upstream failure for {model.model_id}")
 
         return ProviderResponse(
-            content=to_provider_response_content(request, model, self.name),
+            content=build_demo_content(request, model, self.name),
             provider=self.name,
             model_id=model.model_id,
         )
