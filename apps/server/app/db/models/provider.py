@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 
 class Provider(TimestampMixin, Base, table=True):
+    """Provider configuration persisted as the parent record for discovered models."""
+
     __tablename__ = "providers"
 
     id: int | None = Field(default=None, primary_key=True)

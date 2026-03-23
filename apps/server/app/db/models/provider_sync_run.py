@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 
 class ProviderSyncRun(TimestampMixin, Base, table=True):
+    """Audit row for each synchronization attempt against a provider model API."""
+
     __tablename__ = "provider_sync_runs"
 
     id: int | None = Field(default=None, primary_key=True)

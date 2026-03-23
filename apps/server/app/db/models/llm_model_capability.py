@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 
 class LLMModelCapability(TimestampMixin, Base, table=True):
+    """Capability tags attached to a model so routing can filter by feature support."""
+
     __tablename__ = "llm_model_capabilities"
     __table_args__ = (
         UniqueConstraint("model_id", "capability"),

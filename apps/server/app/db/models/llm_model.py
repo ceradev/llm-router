@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 
 class LLMModel(TimestampMixin, Base, table=True):
+    """Discovered provider model plus runtime-facing metadata used by the gateway."""
+
     __tablename__ = "llm_models"
     __table_args__ = (
         UniqueConstraint("provider_id", "external_model_id"),

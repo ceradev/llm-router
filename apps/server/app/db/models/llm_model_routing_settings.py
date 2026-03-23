@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 
 class LLMModelRoutingSettings(TimestampMixin, Base, table=True):
+    """Internal routing knobs kept separate from provider-discovered model metadata."""
+
     __tablename__ = "llm_model_routing_settings"
 
     id: int | None = Field(default=None, primary_key=True)

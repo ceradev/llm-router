@@ -21,10 +21,14 @@ SQLModel.metadata = metadata
 
 
 class Base(SQLModel):
+    """Base class for all persisted SQLModel entities."""
+
     metadata = metadata
 
 
 class TimestampMixin(SQLModel):
+    """Shared audit fields for rows managed by the application."""
+
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_type=DateTime(timezone=True),
