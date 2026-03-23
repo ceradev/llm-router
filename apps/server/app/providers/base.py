@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Protocol
 
 from app.catalog.types import Capability, ModelProfile
@@ -9,6 +10,10 @@ from app.gateway.types import ProviderResponse, RoutedRequest
 
 class ProviderError(RuntimeError):
     """Raised when an upstream provider invocation fails."""
+
+
+class ProviderDiscoveryError(RuntimeError):
+    """Raised when model discovery against a provider fails."""
 
 
 class ProviderAdapter(Protocol):
@@ -20,6 +25,14 @@ class ProviderAdapter(Protocol):
         model: ModelProfile,
     ) -> ProviderResponse:
         """Execute a request against a concrete provider/model."""
+
+
+@dataclass(frozen=True)
+class DiscoveredProviderModel:
+    provider: str
+    external_model_id: str
+    owned_by: str | None
+    created_at_unix: int | None
 
 
 def build_demo_content(request: RoutedRequest, model: ModelProfile, provider_name: str) -> str:

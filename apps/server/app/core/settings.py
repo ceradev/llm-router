@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     app_name: str = "LLM Gateway"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/llm_router"
     database_echo: bool = False
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com/v1"
 
     model_config = SettingsConfigDict(
         env_file=".env",
