@@ -61,10 +61,29 @@ main.py
 ## Ejecutar
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres
 uv run python main.py
 ```
 
 La API queda disponible en `http://127.0.0.1:8000`.
+
+## Base de datos PostgreSQL
+
+La app usa `SQLModel` sobre PostgreSQL y crea las tablas automáticamente al arrancar.
+
+Variables principales:
+
+```bash
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/llm_router
+DATABASE_ECHO=false
+```
+
+Si quieres levantar sólo la base:
+
+```bash
+docker compose up -d postgres
+```
 
 ## Endpoints
 
