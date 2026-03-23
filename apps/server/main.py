@@ -1,17 +1,6 @@
-from fastapi import FastAPI
 import uvicorn
 
-app = FastAPI(title="server")
-
-
-@app.get("/")
-def read_root() -> dict[str, str]:
-    return {"message": "Hello from FastAPI"}
-
-
-@app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {"status": "ok"}
+from app.main import app
 
 
 def main() -> None:
