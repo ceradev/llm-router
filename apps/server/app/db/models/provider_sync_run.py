@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Column, DateTime
+from sqlmodel import Field, Relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -12,23 +12,27 @@ if TYPE_CHECKING:
     from app.db.models.provider import Provider
 
 
-class ProviderSyncRun(TimestampMixin, Base):
+class ProviderSyncRun(TimestampMixin, Base, table=True):
     __tablename__ = "provider_sync_runs"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    provider_id: Mapped[int] = mapped_column(
-        ForeignKey("providers.id", ondelete="CASCADE"),
+    id: int | None = Field(default=None, primary_key=True)
+    provider_id: int = Field(
+        foreign_key="providers.id",
         index=True,
-        nullable=False,
     )
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    models_found: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    models_updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    error_message: Mapped[str | None] = mapped_column(Text)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
+    status: str = Field(max_length=32)
+    models_found: int = Field(default=0)
+    models_updated: int = Field(default=0)
+    error_message: str | None = Field(default=None)
+    started_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+        )
     )
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True)),
+    )
 
-    provider: Mapped["Provider"] = relationship(back_populates="sync_runs")
+    provider: "Provider" = Relationship(back_populates="sync_runs")

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlmodel import Field, Relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -12,20 +11,20 @@ if TYPE_CHECKING:
     from app.db.models.provider_sync_run import ProviderSyncRun
 
 
-class Provider(TimestampMixin, Base):
+class Provider(TimestampMixin, Base, table=True):
     __tablename__ = "providers"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    slug: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    api_base_url: Mapped[str | None] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    id: int | None = Field(default=None, primary_key=True)
+    slug: str = Field(index=True, unique=True, max_length=64)
+    display_name: str = Field(max_length=128)
+    api_base_url: str | None = Field(default=None, max_length=255)
+    is_active: bool = Field(default=True)
 
-    models: Mapped[list["LLMModel"]] = relationship(
+    models: list["LLMModel"] = Relationship(
         back_populates="provider",
-        cascade="all, delete-orphan",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    sync_runs: Mapped[list["ProviderSyncRun"]] = relationship(
+    sync_runs: list["ProviderSyncRun"] = Relationship(
         back_populates="provider",
-        cascade="all, delete-orphan",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )

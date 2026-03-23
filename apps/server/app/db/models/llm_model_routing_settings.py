@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlmodel import Field, Relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -11,22 +10,21 @@ if TYPE_CHECKING:
     from app.db.models.llm_model import LLMModel
 
 
-class LLMModelRoutingSettings(TimestampMixin, Base):
+class LLMModelRoutingSettings(TimestampMixin, Base, table=True):
     __tablename__ = "llm_model_routing_settings"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    model_id: Mapped[int] = mapped_column(
-        ForeignKey("llm_models.id", ondelete="CASCADE"),
+    id: int | None = Field(default=None, primary_key=True)
+    model_id: int = Field(
+        foreign_key="llm_models.id",
         unique=True,
-        nullable=False,
     )
-    quality_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    latency_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    cost_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    default_temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.2)
-    priority_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
-    allow_fallback: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    enabled_for_routing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    notes: Mapped[str | None] = mapped_column(Text)
+    quality_score: int = Field(default=0)
+    latency_score: int = Field(default=0)
+    cost_score: int = Field(default=0)
+    default_temperature: float = Field(default=0.2)
+    priority_weight: int = Field(default=100)
+    allow_fallback: bool = Field(default=True)
+    enabled_for_routing: bool = Field(default=True)
+    notes: str | None = Field(default=None)
 
-    model: Mapped["LLMModel"] = relationship(back_populates="routing_settings")
+    model: "LLMModel" = Relationship(back_populates="routing_settings")

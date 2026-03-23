@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Column, DateTime, UniqueConstraint, func
+from sqlmodel import Field, Relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -14,46 +14,53 @@ if TYPE_CHECKING:
     from app.db.models.provider import Provider
 
 
-class LLMModel(TimestampMixin, Base):
+class LLMModel(TimestampMixin, Base, table=True):
     __tablename__ = "llm_models"
     __table_args__ = (
         UniqueConstraint("provider_id", "external_model_id"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    provider_id: Mapped[int] = mapped_column(
-        ForeignKey("providers.id", ondelete="CASCADE"),
+    id: int | None = Field(default=None, primary_key=True)
+    provider_id: int = Field(
+        foreign_key="providers.id",
         index=True,
-        nullable=False,
     )
-    external_model_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    routing_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    supports_json: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    supports_tools: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    supports_vision: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    context_window: Mapped[int | None] = mapped_column(Integer)
-    max_output_tokens: Mapped[int | None] = mapped_column(Integer)
-    discovered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+    external_model_id: str = Field(max_length=255)
+    routing_key: str = Field(unique=True, max_length=255)
+    display_name: str = Field(max_length=255)
+    is_active: bool = Field(default=True)
+    is_available: bool = Field(default=True)
+    supports_json: bool = Field(default=False)
+    supports_tools: bool = Field(default=False)
+    supports_vision: bool = Field(default=False)
+    context_window: int | None = Field(default=None)
+    max_output_tokens: int | None = Field(default=None)
+    discovered_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
     )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+    last_seen_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
     )
 
-    provider: Mapped["Provider"] = relationship(back_populates="models")
-    capabilities: Mapped[list["LLMModelCapability"]] = relationship(
+    provider: "Provider" = Relationship(back_populates="models")
+    capabilities: list["LLMModelCapability"] = Relationship(
         back_populates="model",
-        cascade="all, delete-orphan",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    routing_settings: Mapped["LLMModelRoutingSettings | None"] = relationship(
+    routing_settings: "LLMModelRoutingSettings | None" = Relationship(
         back_populates="model",
-        cascade="all, delete-orphan",
-        uselist=False,
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "uselist": False,
+        },
     )

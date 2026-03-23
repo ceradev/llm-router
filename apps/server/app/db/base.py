@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import DateTime, MetaData, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlmodel import Field, SQLModel
 
 
 metadata = MetaData(
@@ -17,19 +17,28 @@ metadata = MetaData(
 )
 
 
-class Base(DeclarativeBase):
+SQLModel.metadata = metadata
+
+
+class Base(SQLModel):
     metadata = metadata
 
 
-class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+class TimestampMixin(SQLModel):
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_type=DateTime(timezone=True),
+        sa_column_kwargs={
+            "server_default": func.now(),
+            "nullable": False,
+        },
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_type=DateTime(timezone=True),
+        sa_column_kwargs={
+            "server_default": func.now(),
+            "onupdate": func.now(),
+            "nullable": False,
+        },
     )
