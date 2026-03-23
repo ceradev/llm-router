@@ -52,7 +52,7 @@ export function HeroView({
 
   return (
     <motion.div
-      className="relative z-10 mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-16 pt-6 sm:px-6 sm:pt-10"
+      className="relative z-10 mx-auto flex min-h-dvh max-w-4xl flex-col px-4 pb-16 pt-6 sm:px-6 sm:pt-10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, y: -8 }}
@@ -60,13 +60,14 @@ export function HeroView({
     >
       <HeroNavbar onHistoryOpen={onHistoryOpen} historyOpen={historyOpen} />
 
-      <main className="flex min-h-0 flex-1 flex-col justify-center gap-10 overflow-y-auto py-6 sm:gap-12 sm:py-8">
+      <main className="flex min-h-0 flex-1 flex-col justify-start gap-10 overflow-y-auto pt-3 pb-6 sm:gap-12 sm:pt-4 sm:pb-8">
         <HeroHeadline />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={heroPromptBlockTransition}
+          className="relative"
         >
           <HeroPromptField prompt={prompt} setPrompt={setPrompt} />
 
@@ -74,22 +75,22 @@ export function HeroView({
             <AdvancedRoutingToggle advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} />
             <HeroAnalyseButton onClick={onAnalyse} canSubmit={canSubmit} />
           </div>
-        </motion.div>
 
-        <AnimatePresence mode="wait">
-          {advancedOpen && (
-            <AdvancedOptionsPanel
-              priority={priority}
-              setPriority={setPriority}
-              useCases={useCases}
-              toggleUseCase={toggleUseCase}
-              providers={providers}
-              toggleProvider={toggleProvider}
-              contextSize={contextSize}
-              setContextSize={setContextSize}
-            />
-          )}
-        </AnimatePresence>
+          <AnimatePresence mode="wait">
+            {advancedOpen && (
+              <AdvancedOptionsPanel
+                priority={priority}
+                setPriority={setPriority}
+                useCases={useCases}
+                toggleUseCase={toggleUseCase}
+                providers={providers}
+                toggleProvider={toggleProvider}
+                contextSize={contextSize}
+                setContextSize={setContextSize}
+              />
+            )}
+          </AnimatePresence>
+        </motion.div>
       </main>
     </motion.div>
   );

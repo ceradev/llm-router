@@ -12,11 +12,11 @@ export function HeroHeadline() {
       transition={heroHeadlineTransition}
       className="text-center"
     >
-      <h1 className="text-balance bg-gradient-to-r from-[var(--headline-from)] via-[var(--headline-via)] to-[var(--headline-to)] bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl md:text-5xl sm:leading-tight">
+      <h1 className="text-balance bg-linear-to-r from-(--headline-from) via-(--headline-via) to-(--headline-to) bg-clip-text text-3xl font-semibold tracking-[-0.04em] text-transparent sm:text-4xl md:text-6xl sm:leading-tight">
         <span className="block">{t('heroLine1')}</span>
         <span className="block">{t('heroLine2')}</span>
       </h1>
-      <p className="mx-auto mt-3 max-w-xl text-pretty text-base bg-gradient-to-r from-[var(--headline-from)] via-[var(--headline-via)] to-[var(--headline-to)] bg-clip-text text-transparent sm:text-lg md:text-2xl leading-relaxed tracking-tight">
+      <p className="mx-auto mt-3 max-w-2xl text-pretty text-base bg-linear-to-r from-(--headline-from) via-(--headline-via) to-(--headline-to) bg-clip-text text-transparent sm:text-lg md:text-3xl leading-relaxed tracking-[-0.02em]">
         {t('heroSubtitle')}
       </p>
     </motion.div>

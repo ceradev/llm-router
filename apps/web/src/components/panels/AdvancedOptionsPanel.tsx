@@ -1,18 +1,19 @@
 import { motion } from 'framer-motion';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import type { TranslationKey } from '../../i18n/translations';
 import { cn } from '../../lib/cn';
-import { IconApi, IconBatch, IconChat, IconCode, IconInfo } from '../shared/icons';
+import { IconChevronDown, IconInfo } from '../shared/icons';
 
 export type Priority = 'quality' | 'speed' | 'cost';
 export type UseCaseId = 'ide' | 'api' | 'chatbot' | 'batch';
 export type ContextSize = 'small' | 'medium' | 'large';
 
-const USE_CASE_IDS: { id: UseCaseId; titleKey: string; blurbKey: string; Icon: typeof IconCode }[] = [
-  { id: 'ide', titleKey: 'useCaseIde', blurbKey: 'useCaseIdeBlurb', Icon: IconCode },
-  { id: 'api', titleKey: 'useCaseApi', blurbKey: 'useCaseApiBlurb', Icon: IconApi },
-  { id: 'chatbot', titleKey: 'useCaseChatbot', blurbKey: 'useCaseChatbotBlurb', Icon: IconChat },
-  { id: 'batch', titleKey: 'useCaseBatch', blurbKey: 'useCaseBatchBlurb', Icon: IconBatch },
+const USE_CASE_IDS: { id: UseCaseId; titleKey: TranslationKey }[] = [
+  { id: 'ide', titleKey: 'useCaseIde' },
+  { id: 'api', titleKey: 'useCaseApi' },
+  { id: 'chatbot', titleKey: 'useCaseChatbot' },
+  { id: 'batch', titleKey: 'useCaseBatch' },
 ];
 
 const PROVIDERS = ['OpenAI', 'Anthropic', 'Google'] as const;
@@ -36,8 +37,8 @@ type Props = {
 
 function SectionLabel({ children, hint }: { children: string; hint: string }) {
   return (
-    <div className="mb-2 flex items-center gap-1.5">
-      <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{children}</span>
+    <div className="mb-2.5 flex items-center gap-1.5">
+      <span className="text-xs font-medium tracking-wide text-[var(--text-muted)]">{children}</span>
       <span className="group relative inline-flex">
         <button
           type="button"
@@ -46,7 +47,7 @@ function SectionLabel({ children, hint }: { children: string; hint: string }) {
         >
           <IconInfo className="h-3.5 w-3.5" />
         </button>
-        <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-1 w-48 -translate-x-1/2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)]/95 px-2 py-1.5 text-[11px] leading-snug text-[var(--text-primary)] opacity-0 shadow-lg backdrop-blur-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-1 w-56 -translate-x-1/2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)]/95 px-2.5 py-2 text-xs leading-snug text-[var(--text-primary)] opacity-0 shadow-lg backdrop-blur-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           {hint}
         </span>
       </span>
@@ -66,6 +67,30 @@ export function AdvancedOptionsPanel({
 }: Props) {
   const { t } = useI18n();
   const priorities: Priority[] = ['quality', 'speed', 'cost'];
+  const contextOrder: ContextSize[] = ['small', 'medium', 'large'];
+  const contextProgress = contextOrder.indexOf(contextSize) / (contextOrder.length - 1);
+  const [providersOpen, setProvidersOpen] = useState(false);
+  const providersRef = useRef<HTMLDivElement>(null);
+  const providersListId = useId();
+  const selectedProviders = PROVIDERS.filter((name) => providers.has(name));
+
+  useEffect(() => {
+    if (!providersOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (providersRef.current && !providersRef.current.contains(e.target as Node)) {
+        setProvidersOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setProvidersOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [providersOpen]);
 
   return (
     <motion.div
@@ -74,12 +99,18 @@ export function AdvancedOptionsPanel({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
       transition={{ duration: 0.28, ease: 'easeOut' }}
-      className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-glass)] p-5 shadow-[var(--shadow-elevated)] backdrop-blur-xl sm:p-6"
+      className="relative mt-6 overflow-visible rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-glass)] p-5 shadow-[var(--shadow-elevated)] backdrop-blur-xl sm:p-6"
     >
-      <div className="mb-6">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -top-2.5 left-[28%] h-5 w-5 -translate-x-1/2 rotate-45 border-l border-t border-[var(--border-subtle)] bg-[var(--surface-glass)] sm:left-[32%]"
+      />
+      <div className="pointer-events-none absolute inset-y-0 left-[42%] w-40 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.42),rgba(59,130,246,0.08)_45%,transparent_72%)] blur-2xl" />
+      <div className="relative z-10 space-y-6">
+      <div>
         <SectionLabel hint={t('priorityHint')}>{t('priority')}</SectionLabel>
         <div
-          className="inline-flex rounded-full border border-[var(--border-subtle)] bg-[var(--segment-bg)] p-1"
+          className="grid grid-cols-3 rounded-full border border-[var(--border-subtle)] bg-black/45 p-1"
           role="tablist"
           aria-label="Routing priority"
         >
@@ -98,7 +129,7 @@ export function AdvancedOptionsPanel({
               {priority === p && (
                 <motion.span
                   layoutId="priority-pill"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[#3B82F6]/35 to-[#8B5CF6]/35 shadow-[0_0_24px_rgba(59,130,246,0.2)]"
+                  className="absolute inset-0 rounded-full bg-white/18 shadow-[0_0_20px_rgba(59,130,246,0.25)]"
                   transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                 />
               )}
@@ -108,10 +139,10 @@ export function AdvancedOptionsPanel({
         </div>
       </div>
 
-      <div className="mb-6">
+      <div>
         <SectionLabel hint={t('useCaseHint')}>{t('useCase')}</SectionLabel>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {USE_CASE_IDS.map(({ id, titleKey, blurbKey, Icon }) => {
+        <div className="grid grid-cols-4 gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-black/45 p-1.5">
+          {USE_CASE_IDS.map(({ id, titleKey }) => {
             const on = useCases.has(id);
             return (
               <button
@@ -119,48 +150,13 @@ export function AdvancedOptionsPanel({
                 type="button"
                 onClick={() => toggleUseCase(id)}
                 className={cn(
-                  'flex gap-3 rounded-xl border p-4 text-left transition-all duration-200',
+                  'rounded-lg px-3 py-2.5 text-center text-sm font-medium transition-all duration-200 sm:px-4',
                   on
-                    ? 'border-[#3B82F6]/40 bg-gradient-to-br from-[#3B82F6]/10 to-[#8B5CF6]/10 shadow-[0_0_0_1px_rgba(59,130,246,0.15)]'
-                    : 'border-[var(--border-subtle)] bg-[var(--surface-glass)] hover:border-[var(--surface-glass-hover)] hover:bg-[var(--surface-glass-hover)]',
+                    ? 'bg-white/16 text-[var(--text-primary)] shadow-[0_0_14px_rgba(59,130,246,0.18)]'
+                    : 'text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text-primary)]',
                 )}
               >
-                <span
-                  className={cn(
-                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors',
-                    on ? 'border-[#8B5CF6]/35 bg-[#8B5CF6]/15 text-[var(--text-accent-secondary)]' : 'border-[var(--border-subtle)] bg-[var(--surface-glass)] text-[var(--text-muted)]',
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold text-[var(--text-primary)]">{t(titleKey as TranslationKey)}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-[var(--text-muted)]">{t(blurbKey as TranslationKey)}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <SectionLabel hint={t('providersHint')}>{t('preferredProviders')}</SectionLabel>
-        <div className="flex flex-wrap gap-2">
-          {PROVIDERS.map((name) => {
-            const on = providers.has(name);
-            return (
-              <button
-                key={name}
-                type="button"
-                onClick={() => toggleProvider(name)}
-                className={cn(
-                  'rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200',
-                  on
-                    ? 'border-[#8B5CF6]/45 bg-[#8B5CF6]/15 text-[var(--text-primary)] shadow-[0_0_20px_rgba(139,92,246,0.15)]'
-                    : 'border-[var(--border-subtle)] bg-[var(--surface-glass)] text-[var(--text-muted)] hover:border-[var(--surface-glass-hover)] hover:text-[var(--text-primary)]',
-                )}
-              >
-                {name}
+                {t(titleKey)}
               </button>
             );
           })}
@@ -168,33 +164,104 @@ export function AdvancedOptionsPanel({
       </div>
 
       <div>
-        <SectionLabel hint={t('contextHint')}>{t('contextSize')}</SectionLabel>
-        <div className="flex gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--segment-bg)] p-3 sm:p-4">
-          {(['small', 'medium', 'large'] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setContextSize(key)}
-              className={cn(
-                'flex-1 rounded-lg py-2.5 text-center text-sm font-medium capitalize transition-all duration-200',
-                contextSize === key
-                  ? 'bg-gradient-to-r from-[#3B82F6]/30 to-[#8B5CF6]/25 text-[var(--text-primary)] shadow-inner'
-                  : 'text-[var(--text-muted)] hover:bg-[var(--surface-glass-hover)] hover:text-[var(--text-primary)]',
+        <SectionLabel hint={t('providersHint')}>{t('preferredProviders')}</SectionLabel>
+        <div ref={providersRef} className="relative mt-0.5">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--border-subtle)] bg-black/45 p-2 text-left"
+            onClick={() => setProvidersOpen((v) => !v)}
+            aria-expanded={providersOpen}
+            aria-controls={providersListId}
+            aria-label={t('preferredProviders')}
+          >
+            <div className="flex min-h-11 flex-1 flex-wrap items-center gap-2.5">
+              {selectedProviders.length > 0 ? (
+                selectedProviders.map((name) => (
+                  <span
+                    key={name}
+                    className="rounded-lg border border-[#3B82F6]/35 bg-[#1a2235] px-3.5 py-2 text-sm font-medium text-[var(--text-primary)]"
+                  >
+                    {name}
+                  </span>
+                ))
+              ) : (
+                <span className="px-2 text-sm text-[var(--text-muted)]/90">{t('preferredProviders')}</span>
               )}
+            </div>
+            <span className="rounded-md p-2 text-[var(--text-muted)] transition-colors hover:bg-white/15 hover:text-[var(--text-primary)]">
+              <IconChevronDown className={cn('h-5 w-5 transition-transform', providersOpen ? 'rotate-180' : '')} />
+            </span>
+          </button>
+          {providersOpen ? (
+            <ul
+              id={providersListId}
+              className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-20 rounded-xl border border-[var(--border-subtle)] bg-[#070b16]/97 p-2 shadow-lg backdrop-blur-md"
             >
-              {key}
-            </button>
-          ))}
+              {PROVIDERS.map((name) => {
+                const on = providers.has(name);
+                return (
+                  <li key={name} className="mb-1 last:mb-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleProvider(name)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors',
+                        on ? 'bg-[#1b2742] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-white/12 hover:text-[var(--text-primary)]',
+                      )}
+                    >
+                      <span>{name}</span>
+                      <span
+                        className={cn(
+                          'h-2.5 w-2.5 rounded-full transition-colors',
+                          on ? 'bg-[#3B82F6]' : 'bg-transparent ring-1 ring-[var(--border-subtle)]',
+                        )}
+                      />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+
+      <div>
+        <SectionLabel hint={t('contextHint')}>{t('contextSize')}</SectionLabel>
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-black/45 p-4">
+          <div className="relative h-3 rounded-full bg-white/8">
+            <motion.span
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#1d4ed8] to-[#3b82f6]"
+              animate={{ width: `${contextProgress * 100}%` }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            />
+            <div className="absolute inset-0 grid grid-cols-3">
+              {contextOrder.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setContextSize(key)}
+                  className="h-full w-full rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-focus)]"
+                  aria-label={`Set context size ${key}`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="mt-2.5 grid grid-cols-3 text-xs font-medium text-[var(--text-muted)]">
+            <span>Small</span>
+            <span className="text-center">Medium</span>
+            <span className="text-right">Large</span>
+          </div>
         </div>
         <motion.p
           key={contextSize}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="mt-3 text-sm text-[var(--text-accent)]"
+          className="mt-2.5 text-sm text-[var(--text-muted)]"
         >
           {t(CONTEXT_KEYS[contextSize] as TranslationKey)}
         </motion.p>
+      </div>
       </div>
     </motion.div>
   );

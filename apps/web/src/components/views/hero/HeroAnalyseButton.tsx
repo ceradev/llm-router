@@ -23,11 +23,12 @@ export function HeroAnalyseButton({ onClick, canSubmit }: Props) {
       whileHover={canSubmit ? analyseHoverWhile : undefined}
       whileTap={canSubmit ? analyseTapWhile : undefined}
       transition={analyseButtonSpring}
-      className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] px-8 py-3.5 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(59,130,246,0.26)] transition-shadow duration-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none sm:px-10 sm:py-4 sm:text-base"
-    >
+      className="relative overflow-hidden rounded-xl bg-[linear-gradient(135deg,#3B82F6,#1E40AF)] bg-size-[200%_200%] bg-left px-8 py-3.5 text-sm font-semibold text-white transition-all cursor-pointer duration-50 disabled:cursor-not-allowed disabled:opacity-40 sm:px-10 sm:py-4 sm:text-base">
+
       <span className="relative z-10">{t('analyse')}</span>
+
       <motion.span
-        className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
+        className="absolute inset-0 bg-linear-to-r from-white/0 via-white/10 to-white/0"
         initial={{ x: '-100%' }}
         whileHover={canSubmit ? { x: '100%' } : undefined}
         transition={analyseShineTransition}

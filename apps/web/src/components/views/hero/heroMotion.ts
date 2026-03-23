@@ -29,8 +29,8 @@ export const analyseButtonSpring: Transition = {
 export const analyseShineTransition: Transition = { duration: 0.6 };
 
 export const analyseHoverWhile = {
-  scale: 1.02,
-  boxShadow: '0 0 32px rgba(139,92,246,0.35), 0 0 48px rgba(59,130,246,0.2)',
+  scale: 1.05,
+  backgroundPosition: '100% 50%',
 } as const;
 
 export const analyseTapWhile = { scale: 0.97 } as const;
