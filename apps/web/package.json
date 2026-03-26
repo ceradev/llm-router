@@ -13,15 +13,22 @@
   },
   "dependencies": {
     "@astrojs/react": "^5.0.1",
+    "@splinetool/react-spline": "^4.1.0",
+    "@splinetool/runtime": "^1.12.70",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "astro": "^6.0.8",
+    "camera-controls": "^2.9.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
+    "postprocessing": "^6.39.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0"
   }
 }

@@ -1,0 +1,6 @@
+export * from "./advanced-options"
+export * from "./feature"
+export * from "./hero"
+export * from "./how-it-works"
+export * from "./interactive-demo"
+export * from "./why"

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "skills": {
+    "3d-web-experience": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "18b4f9dca7aa13d0f65938ed926c7865d635d74c58ea60291e313722f1d3a9dd"
+    },
+    "threejs-animation": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "9fa3bc097444f078e5aab739166b143a466127fd773692b022f16a59567512e9"
+    },
+    "threejs-fundamentals": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "171ab985edeba9510d51855698f0aaf7f58972c0b7ce180d0f458177eb1dece5"
+    },
+    "threejs-geometry": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "ffbe2ea33ea7f8974a7ae376b33320233493f476ae263e3602cad5ce557c6c71"
+    },
+    "threejs-interaction": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "804e6721dc44f176c8605a20bb6ff5ec7778ae8d25b8e9eb5a1ee501099a146d"
+    },
+    "threejs-lighting": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "c76aeac47e8670f86fdb6999cdc1e556572d68daf4e738d8ca9ec20b1d3cba95"
+    },
+    "threejs-loaders": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "2a13a5ef04bf489730fc4ddc6b8abae1c39c05150b774c383603ad08db0be0db"
+    },
+    "threejs-materials": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "419eb8d54c4b89392ab8fce8d588a5446b663f605d1f0f17e133b0aeb0a11f82"
+    },
+    "threejs-postprocessing": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "297f2fd02020b4d8a5fa2c16c5e2db061fbacf7a9fa2b67aa086dfe6d2f8db4b"
+    },
+    "threejs-shaders": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "4143902050592a88cb22dc299265f65001fdaca9046d490dabb9d6029469e055"
+    },
+    "threejs-skills": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "a9a404036d9138ccaa3d54f1e4676ae29f9a53bfd35b3f05cdaaf0df268554c3"
+    },
+    "threejs-textures": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "c9e29e2ad41bf8172a1ca4b880ffae0f1499828e7f41c0ef045d9665b3b5cbd1"
+    }
+  }
+}
