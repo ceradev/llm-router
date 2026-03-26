@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from app.catalog.types import Capability, ModelProfile
-from app.providers.config.anthropic import PROVIDER_NAME as ANTHROPIC_PROVIDER
-from app.providers.config.deepseek import PROVIDER_NAME as DEEPSEEK_PROVIDER
-from app.providers.config.groq import PROVIDER_NAME as GROQ_PROVIDER
-from app.providers.config.openai import PROVIDER_NAME as OPENAI_PROVIDER
+from packages.infrastructure.providers.config.anthropic import PROVIDER_NAME as ANTHROPIC_PROVIDER
+from packages.infrastructure.providers.config.deepseek import PROVIDER_NAME as DEEPSEEK_PROVIDER
+from packages.infrastructure.providers.config.groq import PROVIDER_NAME as GROQ_PROVIDER
+from packages.infrastructure.providers.config.openai import PROVIDER_NAME as OPENAI_PROVIDER
 
 
 def list_models() -> list[ModelProfile]:

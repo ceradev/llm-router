@@ -1,50 +1,42 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.presenters.gateway import (
-    to_attempt_response,
-    to_gateway_response,
-    to_model_summary_list,
-)
-from app.api.schemas.requests import GatewayRequest
-from app.api.schemas.responses import GatewayResponse, ModelSummaryResponse
-from app.catalog.registry import ModelRegistry
-from app.gateway.classify import PromptClassifier
-from app.gateway.fallback import FallbackExecutor, RoutingExhaustedError
-from app.gateway.orchestrator import GatewayOrchestrator
-from app.gateway.select import ModelSelector
-from app.gateway.types import GatewayTask
-from app.providers.registry import build_provider_clients
+from app.api.dependencies.gateway import get_db_session, get_gateway_orchestrator
+from packages.schemas.gateway_request import GatewayRequest
+from packages.schemas.gateway_response import GatewayResponse, ModelSummaryResponse
+from packages.schemas.mappers import to_attempt_response, to_gateway_response, to_model_summary_list
+from packages.services.execution.fallback_executor import RoutingExhaustedError
+from packages.domain.gateway import GatewayTask
+from sqlmodel import Session
 
 router = APIRouter(prefix="/v1", tags=["gateway"])
 
-
-@lru_cache
-def get_gateway_service() -> GatewayOrchestrator:
-    registry = ModelRegistry()
-    return GatewayOrchestrator(
-        registry=registry,
-        classifier=PromptClassifier(),
-        selector=ModelSelector(registry),
-        executor=FallbackExecutor(build_provider_clients()),
-    )
+@router.get("/models")
+def list_models(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> list[ModelSummaryResponse]:
+    orchestrator = get_gateway_orchestrator(session)
+    return to_model_summary_list(orchestrator.list_models())
 
 
-@router.get("/models", response_model=list[ModelSummaryResponse])
-def list_models(service: GatewayOrchestrator = Depends(get_gateway_service)) -> list[ModelSummaryResponse]:
-    return to_model_summary_list(service.list_models())
-
-
-@router.post("/chat/completions", response_model=GatewayResponse)
+@router.post(
+    "/chat/completions",
+    responses={
+        502: {
+            "description": "All candidate models failed",
+        }
+    },
+)
 def create_completion(
     payload: GatewayRequest,
-    service: GatewayOrchestrator = Depends(get_gateway_service),
+    session: Annotated[Session, Depends(get_db_session)],
 ) -> GatewayResponse:
+    orchestrator = get_gateway_orchestrator(session)
     try:
-        result = service.execute(
+        result = orchestrator.execute(
             GatewayTask(
                 prompt=payload.prompt,
                 priority=payload.priority,
