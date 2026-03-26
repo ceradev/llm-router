@@ -15,7 +15,6 @@ from packages.services.orchestration.orchestrator import GatewayOrchestrator
 
 
 def get_db_session() -> Generator[Session, None, None]:
-    # Delegate lifecycle handling to the infrastructure layer.
     yield from get_session()
 
 
@@ -31,4 +30,3 @@ def get_gateway_orchestrator(session: Session) -> GatewayOrchestrator:
         selector=selector,
         executor=FallbackExecutor(build_provider_clients()),
     )
-

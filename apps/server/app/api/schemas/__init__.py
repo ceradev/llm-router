@@ -1,7 +1,7 @@
-"""Pydantic schemas exposed by the API."""
+"""Pydantic schemas (re-exported from packages for convenience)."""
 
-from app.api.schemas.requests import GatewayRequest
-from app.api.schemas.responses import (
+from packages.schemas.gateway_request import GatewayRequest
+from packages.schemas.gateway_response import (
     GatewayResponse,
     InvocationAttemptResponse,
     ModelSummaryResponse,

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependencies.gateway import get_db_session, get_gateway_orchestrator
+from app.api.dependencies.orchestrator import get_db_session, get_gateway_orchestrator
 from packages.schemas.gateway_request import GatewayRequest
 from packages.schemas.gateway_response import GatewayResponse, ModelSummaryResponse
 from packages.schemas.mappers import to_attempt_response, to_gateway_response, to_model_summary_list
