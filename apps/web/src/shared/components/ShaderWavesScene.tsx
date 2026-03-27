@@ -38,7 +38,9 @@ export function ShaderWavesScene({
     <ShaderGradientCanvas
       className="absolute inset-0 h-full w-full"
       style={{ position: "absolute", inset: 0 }}
-      pixelDensity={1.25}
+      // Higher pixel density is noticeably more expensive (esp. during scroll / layout work).
+      // Keep it at 1 for smoother interactions on more devices.
+      pixelDensity={1}
       fov={45}
       pointerEvents="none"
       lazyLoad

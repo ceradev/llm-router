@@ -1,20 +1,8 @@
-import { motion, useReducedMotion } from "framer-motion"
-
 import { useI18n } from "@/contexts/I18nContext"
 import { InteractiveDemoCard } from "@/features/landing/components/interactive-demo"
 
 export function WhySection() {
   const { t } = useI18n()
-  const reduceMotion = useReducedMotion() ?? false
-
-  const drift =
-    reduceMotion
-      ? undefined
-      : {
-          y: [0, -10, 0],
-          x: [0, 8, 0],
-          rotate: [0, 2, 0],
-        }
 
   return (
     <section className="relative mt-12 sm:mt-14">
@@ -38,24 +26,12 @@ export function WhySection() {
           </div>
 
           <div className="relative min-h-56 overflow-hidden rounded-2xl border border-[#3B82F6]/20 bg-[linear-gradient(135deg,rgba(59,130,246,0.20),rgba(0,0,0,0)_55%,rgba(14,165,233,0.16))] shadow-[0_0_60px_rgba(59,130,246,0.10)] sm:min-h-64">
-            <motion.div
+            <div
               aria-hidden
-              animate={drift}
-              transition={
-                reduceMotion
-                  ? { duration: 0 }
-                  : { duration: 9, repeat: Infinity, ease: "easeInOut" }
-              }
               className="absolute -left-10 -top-10 h-52 w-52 rounded-full bg-[#3B82F6]/26 blur-3xl"
             />
-            <motion.div
+            <div
               aria-hidden
-              animate={drift ? { ...drift, x: [0, -10, 0], rotate: [0, -2, 0] } : undefined}
-              transition={
-                reduceMotion
-                  ? { duration: 0 }
-                  : { duration: 10.5, repeat: Infinity, ease: "easeInOut" }
-              }
               className="absolute -bottom-14 -right-14 h-60 w-60 rounded-full bg-[#0EA5E9]/22 blur-3xl"
             />
             <div

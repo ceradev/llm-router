@@ -1,6 +1,7 @@
 import { AnimatePresence } from "framer-motion"
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
+import { BackgroundMotionProvider } from "@/contexts/BackgroundMotionContext"
 import { I18nProvider } from "@/contexts/I18nContext"
 import { ThemeProvider } from "@/contexts/ThemeContext"
 
@@ -169,18 +170,20 @@ export default function LLMRouterApp() {
   return (
     <ThemeProvider>
       <I18nProvider>
-        <div className="relative min-h-dvh font-sans antialiased overflow-hidden">
-          <AppBackgrounds phase={phase} />
+        <BackgroundMotionProvider>
+          <div className="relative min-h-dvh font-sans antialiased overflow-hidden">
+            <AppBackgrounds phase={phase} />
 
-          <AnimatePresence mode="wait">{phaseView}</AnimatePresence>
+            <AnimatePresence mode="wait">{phaseView}</AnimatePresence>
 
-          <HistoryDrawer
-            open={historyOpen}
-            onClose={() => setHistoryOpen(false)}
-            onRerun={handleHistoryRerun}
-            onView={handleHistoryView}
-          />
-        </div>
+            <HistoryDrawer
+              open={historyOpen}
+              onClose={() => setHistoryOpen(false)}
+              onRerun={handleHistoryRerun}
+              onView={handleHistoryView}
+            />
+          </div>
+        </BackgroundMotionProvider>
       </I18nProvider>
     </ThemeProvider>
   )

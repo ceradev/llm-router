@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { useEffect, useRef, useState } from "react"
 
 import { useDemoFlow } from "@/features/landing/hooks"
 
@@ -20,7 +21,22 @@ export function InteractiveDemoCard({
   stretch = false,
 }: Readonly<InteractiveDemoCardProps>) {
   const reduceMotion = useReducedMotion() ?? false
-  const { phase } = useDemoFlow({ enabled: true, initialPhase: "input", timingsMs: TIMINGS_MS })
+  const [running, setRunning] = useState(false)
+  const { phase, restart } = useDemoFlow({
+    enabled: running,
+    initialPhase: "input",
+    timingsMs: TIMINGS_MS,
+  })
+  const startedRef = useRef(false)
+
+  useEffect(() => {
+    if (!running) return
+    if (phase !== "input") startedRef.current = true
+    if (phase === "input" && startedRef.current) {
+      startedRef.current = false
+      setRunning(false)
+    }
+  }, [phase, running])
 
   const transition = {
     duration: reduceMotion ? 0 : 0.35,
@@ -32,7 +48,16 @@ export function InteractiveDemoCard({
   let demoContent: React.ReactNode
   switch (phase) {
     case "input":
-      demoContent = <DemoInput prompt="Build a SaaS with AI" stretch={stretch} />
+      demoContent = (
+        <DemoInput
+          prompt="Build a SaaS with AI"
+          stretch={stretch}
+          onAnalyse={() => {
+            restart()
+            setRunning(true)
+          }}
+        />
+      )
       break
     case "loading":
       demoContent = <DemoLoading text="Analyzing..." stretch={stretch} />
@@ -76,8 +101,8 @@ export function InteractiveDemo() {
             See how it works
           </h2>
           <p className="mt-3 max-w-prose text-sm leading-relaxed text-(--text-muted)">
-            A quick, auto-playing preview of the routing loop: prompt in, analysis in motion, and a
-            top match out.
+            A quick preview of the routing loop: prompt in, analysis in motion, and a top match
+            out.
           </p>
         </div>
 

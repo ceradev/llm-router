@@ -110,15 +110,10 @@ export function LandingView({
               aria-label={t("howItWorksTitle")}
               onClick={scrollToExplanation}
               initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: [0, 4, 0] }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{
                 opacity: { delay: 0.45, duration: 0.35 },
-                y: {
-                  delay: 0.45,
-                  duration: 1.9,
-                  repeat: Number.POSITIVE_INFINITY,
-                  ease: "easeInOut",
-                },
+                y: { delay: 0.45, duration: 0.35, ease: "easeOut" },
               }}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-(--border-subtle) bg-(--surface-glass) text-(--text-muted) shadow-(--shadow-card) transition hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
             >

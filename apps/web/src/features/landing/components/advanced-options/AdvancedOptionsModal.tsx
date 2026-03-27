@@ -53,10 +53,10 @@ export function AdvancedOptionsModal({
 
     const overlayT: Transition = reduceMotion
         ? { duration: 0 }
-        : { duration: 0.18 };
+        : { duration: 0.12 };
     const dialogT: Transition = reduceMotion
         ? { duration: 0 }
-        : { type: "spring", stiffness: 420, damping: 32 };
+        : { type: "tween", duration: 0.14, ease: "easeOut" };
     const segmentedBgClass =
         "bg-[rgba(255,255,255,0.36)] dark:bg-(--segment-bg)";
     const segmentedActivePillClass =
@@ -90,7 +90,7 @@ export function AdvancedOptionsModal({
             <motion.div
                 aria-hidden
                 className={cn(
-                    "absolute inset-0 backdrop-blur-md",
+                    "absolute inset-0",
                     "bg-(--scrim)",
                 )}
                 initial={{ opacity: 0 }}
@@ -107,7 +107,7 @@ export function AdvancedOptionsModal({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.99, y: 8 }}
                 transition={dialogT}
-                className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-(--border-subtle) bg-[rgba(255,255,255,0.4)] dark:bg-(--surface-glass) shadow-(--shadow-elevated) backdrop-blur-xl"
+                className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-(--border-subtle) bg-[rgba(255,255,255,0.92)] dark:bg-[#0b1220] shadow-(--shadow-elevated)"
                 onPointerDown={(e) => e.stopPropagation()}
             >
                 <header className="flex items-center justify-between gap-4 border-b border-(--border-subtle) px-5 py-4 sm:px-6 sm:py-5">
@@ -129,8 +129,6 @@ export function AdvancedOptionsModal({
 
                 <div className="max-h-[min(70vh,640px)] overflow-y-auto p-5 sm:p-6">
                     <div className="relative overflow-visible rounded-2xl p-5 sm:p-6">
-                        <div className="pointer-events-none absolute inset-y-0 left-[42%] w-40 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.38),rgba(59,130,246,0.07)_45%,transparent_72%)] blur-2xl" />
-
                         <div className="relative space-y-6">
                             <div>
                                 <SectionLabel hint={t("priorityHint")}>
@@ -159,17 +157,11 @@ export function AdvancedOptionsModal({
                                             )}
                                         >
                                             {priority === p ? (
-                                                <motion.span
-                                                    layoutId="priority-pill"
+                                                <span
                                                     className={cn(
                                                         "absolute inset-0 rounded-full",
                                                         segmentedActivePillClass,
                                                     )}
-                                                    transition={{
-                                                        type: "spring",
-                                                        stiffness: 400,
-                                                        damping: 35,
-                                                    }}
                                                 />
                                             ) : null}
                                             <span className="relative z-10">
@@ -324,17 +316,11 @@ export function AdvancedOptionsModal({
                                             )}
                                         >
                                             {responseDepth === d ? (
-                                                <motion.span
-                                                    layoutId="response-depth-pill"
+                                                <span
                                                     className={cn(
                                                         "absolute inset-0 rounded-full",
                                                         segmentedActivePillClass,
                                                     )}
-                                                    transition={{
-                                                        type: "spring",
-                                                        stiffness: 400,
-                                                        damping: 35,
-                                                    }}
                                                 />
                                             ) : null}
                                             <span className="relative z-10">

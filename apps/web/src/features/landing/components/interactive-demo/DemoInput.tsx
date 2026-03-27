@@ -3,9 +3,10 @@ import { motion } from "framer-motion"
 type Props = {
   prompt: string
   stretch?: boolean
+  onAnalyse?: () => void
 }
 
-export function DemoInput({ prompt, stretch = false }: Readonly<Props>) {
+export function DemoInput({ prompt, stretch = false, onAnalyse }: Readonly<Props>) {
   const rootClassName = stretch
     ? "h-full w-full flex flex-col justify-center gap-4"
     : "space-y-4"
@@ -29,7 +30,7 @@ export function DemoInput({ prompt, stretch = false }: Readonly<Props>) {
           INPUT
         </p>
         <span className="rounded-full border border-[#3B82F6]/20 bg-[#3B82F6]/10 px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
-          Auto-run
+          Demo
         </span>
       </div>
 
@@ -45,6 +46,18 @@ export function DemoInput({ prompt, stretch = false }: Readonly<Props>) {
           className={textareaClassName}
         />
       </div>
+
+      {onAnalyse ? (
+        <div className={stretch ? "flex justify-start" : "flex justify-end"}>
+          <button
+            type="button"
+            onClick={onAnalyse}
+            className="rounded-lg border border-(--border-subtle) bg-(--surface-glass) px-3 py-1.5 text-xs font-semibold text-(--text-primary) shadow-(--shadow-card) transition-colors hover:bg-(--surface-glass-hover) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
+          >
+            Analizar
+          </button>
+        </div>
+      ) : null}
     </motion.div>
   )
 }

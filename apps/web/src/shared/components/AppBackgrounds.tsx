@@ -27,7 +27,7 @@ export function AppBackgrounds({ phase }: Readonly<Props>) {
         animate={{ opacity: showLoading ? 0 : 1 }}
         transition={t}
       >
-        <ShaderWavesBackground />
+        <ShaderWavesBackground active={!showLoading} />
       </motion.div>
 
       <motion.div

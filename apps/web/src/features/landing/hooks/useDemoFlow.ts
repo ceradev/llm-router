@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 export type DemoPhase = "input" | "loading" | "result"
 
@@ -39,6 +39,10 @@ export function useDemoFlow(options?: UseDemoFlowOptions) {
     return () => globalThis.clearTimeout(timerId)
   }, [enabled, phase, resolvedTimingsMs])
 
-  return { phase }
+  const restart = useCallback(() => {
+    setPhase(initialPhase)
+  }, [initialPhase])
+
+  return { phase, restart }
 }
 

@@ -1,19 +1,32 @@
 import { useReducedMotion } from "framer-motion"
 import { lazy, Suspense } from "react"
 
+import { useBackgroundMotion } from "@/contexts/BackgroundMotionContext"
 import { useTheme } from "@/contexts/ThemeContext"
 
 const ShaderWavesScene = lazy(() =>
   import("./ShaderWavesScene").then((m) => ({ default: m.ShaderWavesScene }))
 )
 
-export function ShaderWavesBackground() {
-  const reduce = useReducedMotion()
+type Props = {
+  /**
+   * When false, the WebGL shader is kept mounted but animation is paused
+   * to avoid unnecessary GPU/CPU work while hidden behind other scenes.
+   */
+  active?: boolean
+}
+
+export function ShaderWavesBackground({ active = true }: Readonly<Props>) {
+  const reduce = useReducedMotion() ?? false
   const { theme } = useTheme()
+  const { enabled } = useBackgroundMotion()
   const colorScheme = theme === "dark" ? "dark" : "light"
-  const animate = reduce ? "off" : "on"
+
+  const animate: "off" | "on" = !active || reduce || !enabled ? "off" : "on"
   const lightOverlayClass =
-    colorScheme === "light" ? "bg-white/16 backdrop-blur-[2px]" : "bg-transparent"
+    // `backdrop-blur` on a fixed fullscreen layer is a common scroll-jank culprit on Chrome.
+    // Keep a light veil without blur to reduce repaints.
+    colorScheme === "light" ? "bg-white/16" : "bg-transparent"
 
   return (
     <div
