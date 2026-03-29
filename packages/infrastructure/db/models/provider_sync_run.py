@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Column, DateTime
+from sqlalchemy.orm import relationship as sa_relationship
 from sqlmodel import Field, Relationship
 
 from packages.infrastructure.db.base import Base, TimestampMixin
@@ -35,5 +36,7 @@ class ProviderSyncRun(TimestampMixin, Base, table=True):
         sa_column=Column(DateTime(timezone=True)),
     )
 
-    provider: "Provider" = Relationship(back_populates="sync_runs")
+    provider: Any = Relationship(
+        sa_relationship=sa_relationship("Provider", back_populates="sync_runs"),
+    )
 

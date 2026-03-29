@@ -109,6 +109,13 @@ export function formatLatency(ms: number): string {
   return `~${(ms / 1000).toFixed(1)} s`
 }
 
+export function formatTokensCount(tokens: number | null | undefined): string {
+  if (tokens == null || !Number.isFinite(tokens)) return "—"
+  if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`
+  if (tokens >= 1000) return `${Math.round(tokens / 100) / 10}k`
+  return `${Math.round(tokens)}`
+}
+
 export function costLabel(rel: RankedModel["costRel"]): string {
   if (rel === "low") return "Lower cost"
   if (rel === "medium") return "Moderate cost"

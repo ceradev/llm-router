@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from packages.domain.gateway import Intent, Priority
 from packages.domain.models import Capability
@@ -11,18 +13,65 @@ class InvocationAttemptResponse(BaseModel):
     model_id: str
     status: str
     detail: str
+    latency_ms: int | None = None
+
+
+class RankedModelResponse(BaseModel):
+    model_id: str
+    rank: int
+    quality_score: float
+    latency_score: float
+    cost_score: float
+    final_score: float
+    explanation: str
+    pros: list[str] | None = None
+    cons: list[str] | None = None
+    context_window: int | None = None
+    max_output_tokens: int | None = None
+    supports_json: bool = False
+    supports_tools: bool = False
+    capabilities: list[str] = Field(default_factory=list)
+    is_free: bool = False
+    tier: str = "alternative"
+
+
+class RankingHighlightResponse(BaseModel):
+    model_id: str
+    display_name: str
+    provider: str
+    reason_key: str
+    same_as_best_overall: bool = False
+
+
+class RankingSummaryResponse(BaseModel):
+    best_overall: RankingHighlightResponse
+    free_alternative: RankingHighlightResponse | None
+    best_quality: RankingHighlightResponse
+    best_cost: RankingHighlightResponse
+    best_speed: RankingHighlightResponse
 
 
 class GatewayResponse(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
+    request_id: UUID
     content: str
     provider: str
-    model_id: str
+    model_id: str = Field(description="Model that produced content (after routing / fallback).")
+    recommended_model_id: str = Field(
+        description="Highest-ranked candidate before execution (may differ if fallback ran).",
+    )
+    response_latency_ms: int | None = Field(
+        default=None,
+        description="Measured latency for the successful provider call, when available.",
+    )
     intent: Intent
     priority: Priority
     applied_temperature: float
     routing_reason: str
+    explanation: str
+    ranking_summary: RankingSummaryResponse
+    ranking: list[RankedModelResponse]
     fallback_used: bool
     candidate_models: list[str]
     attempts: list[InvocationAttemptResponse]
@@ -38,4 +87,3 @@ class ModelSummaryResponse(BaseModel):
     cost_score: int
     supports_json: bool
     capabilities: list[Capability]
-

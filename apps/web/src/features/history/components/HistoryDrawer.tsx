@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 
 import { useI18n } from "@/contexts/I18nContext"
 import { IconClock } from "@/shared/components"
-import { HISTORY_MOCK } from "../data/mock"
+import { fetchHistory } from "@/shared/api/history"
 import type { HistoryItem } from "../types"
 
 type Props = {
@@ -14,6 +15,16 @@ type Props = {
 
 export function HistoryDrawer({ open, onClose, onRerun, onView }: Readonly<Props>) {
   const { t } = useI18n()
+  const [items, setItems] = useState<HistoryItem[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    fetchHistory()
+      .then(setItems)
+      .finally(() => setLoading(false))
+  }, [open])
 
   return (
     <AnimatePresence>
@@ -60,43 +71,57 @@ export function HistoryDrawer({ open, onClose, onRerun, onView }: Readonly<Props
               </button>
             </div>
             <ul className="flex-1 overflow-y-auto p-3">
-              {HISTORY_MOCK.map((item: HistoryItem, i: number) => (
-                <motion.li
-                  key={item.id}
-                  initial={{ opacity: 0, x: 16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.05 * i, duration: 0.25, ease: "easeOut" }}
-                  className="mb-2"
-                >
-                  <div className="group rounded-xl border border-(--border-subtle) bg-(--surface-glass) p-4 transition-colors hover:border-(--surface-glass-hover) hover:bg-(--surface-glass-hover)">
-                    <p className="line-clamp-2 text-sm leading-relaxed text-(--text-primary)">
-                      {item.prompt}
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-(--text-muted)">
-                      <span className="rounded-md bg-[#3B82F6]/15 px-2 py-0.5 font-medium text-(--text-accent)">
-                        {item.model}
-                      </span>
-                      <span>{item.timeAgo}</span>
+              {loading ? (
+                <li className="flex min-h-[40vh] items-center justify-center">
+                  <span
+                    className="h-9 w-9 animate-spin rounded-full border-2 border-(--border-subtle) border-t-[#60A5FA]/80 opacity-80"
+                    aria-busy
+                    aria-label={t("analyzingTitle")}
+                  />
+                </li>
+              ) : items.length === 0 ? (
+                <li className="flex min-h-[40vh] items-center justify-center px-4 text-center text-sm text-(--text-muted)">
+                  {t("historyEmpty")}
+                </li>
+              ) : (
+                items.map((item: HistoryItem, i: number) => (
+                  <motion.li
+                    key={item.id}
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.05 * i, duration: 0.25, ease: "easeOut" }}
+                    className="mb-2"
+                  >
+                    <div className="group rounded-xl border border-(--border-subtle) bg-(--surface-glass) p-4 transition-colors hover:border-(--surface-glass-hover) hover:bg-(--surface-glass-hover)">
+                      <p className="line-clamp-2 text-sm leading-relaxed text-(--text-primary)">
+                        {item.prompt}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-(--text-muted)">
+                        <span className="rounded-md bg-[#3B82F6]/15 px-2 py-0.5 font-medium text-(--text-accent)">
+                          {item.model}
+                        </span>
+                        <span>{item.timeAgo}</span>
+                      </div>
+                      <div className="mt-3 flex gap-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                        <button
+                          type="button"
+                          className="rounded-lg bg-(--surface-glass-hover) px-3 py-1.5 text-xs font-medium text-(--text-primary) transition-colors hover:bg-[#3B82F6]/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
+                          onClick={() => onRerun?.(item)}
+                        >
+                          {t("rerun")}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-(--surface-glass-hover) px-3 py-1.5 text-xs font-medium text-(--text-primary) transition-colors hover:bg-[#0EA5E9]/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
+                          onClick={() => onView?.(item)}
+                        >
+                          {t("view")}
+                        </button>
+                      </div>
                     </div>
-                    <div className="mt-3 flex gap-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                      <button
-                        type="button"
-                        className="rounded-lg bg-(--surface-glass-hover) px-3 py-1.5 text-xs font-medium text-(--text-primary) transition-colors hover:bg-[#3B82F6]/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
-                        onClick={() => onRerun?.(item)}
-                      >
-                        {t("rerun")}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg bg-(--surface-glass-hover) px-3 py-1.5 text-xs font-medium text-(--text-primary) transition-colors hover:bg-[#0EA5E9]/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
-                        onClick={() => onView?.(item)}
-                      >
-                        {t("view")}
-                      </button>
-                    </div>
-                  </div>
-                </motion.li>
-              ))}
+                  </motion.li>
+                ))
+              )}
             </ul>
           </motion.aside>
         </>
@@ -104,4 +129,3 @@ export function HistoryDrawer({ open, onClose, onRerun, onView }: Readonly<Props
     </AnimatePresence>
   )
 }
-

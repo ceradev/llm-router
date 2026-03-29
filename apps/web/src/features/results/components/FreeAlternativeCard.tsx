@@ -2,6 +2,9 @@ import { motion } from "framer-motion"
 
 import { useI18n } from "@/contexts/I18nContext"
 import type { ModelDecision } from "@/features/results/types"
+import type { TranslationKey } from "@/i18n/translations"
+import { ModelCapabilityBadges } from "./ModelCapabilityBadges"
+import { formatTokensCount, translateCatalogProCon } from "../utils"
 
 function ActionButton({
   label,
@@ -39,6 +42,14 @@ export function FreeAlternativeCard({
 
   const runLocal = model.actions?.find((a) => a.kind === "runLocal")
   const useFreeApi = model.actions?.find((a) => a.kind === "useFreeApi")
+  const pros =
+    model.pros.length > 0
+      ? model.pros.map((p) => translateCatalogProCon(p, t))
+      : [t("freeAltProNoCost"), t("freeAltProLocalOrFreeApi")]
+  const cons =
+    model.cons.length > 0
+      ? model.cons.map((c) => translateCatalogProCon(c, t))
+      : [t("freeAltConLowerAccuracy"), t("freeAltConSlower")]
 
   return (
     <motion.section
@@ -56,6 +67,26 @@ export function FreeAlternativeCard({
             {model.name}
           </h3>
           <p className="mt-1 text-sm text-(--text-muted)">{model.provider}</p>
+          <ModelCapabilityBadges model={model} className="mt-2" />
+          {model.rankingReasonKey ? (
+            <p className="mt-3 text-sm leading-relaxed text-(--text-muted)">
+              {t(model.rankingReasonKey as TranslationKey)}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-(--text-muted)">
+            <span>
+              <span className="uppercase tracking-wide">{t("labelContext")}: </span>
+              <span className="font-medium tabular-nums text-(--text-primary)">
+                {formatTokensCount(model.contextWindowTokens)}
+              </span>
+            </span>
+            <span>
+              <span className="uppercase tracking-wide">{t("labelOutputTokens")}: </span>
+              <span className="font-medium tabular-nums text-(--text-primary)">
+                {formatTokensCount(model.maxOutputTokens ?? undefined)}
+              </span>
+            </span>
+          </div>
         </div>
 
         {(runLocal || useFreeApi) && (
@@ -76,14 +107,12 @@ export function FreeAlternativeCard({
             {t("pros")}
           </p>
           <ul className="mt-2 space-y-1.5 text-sm text-(--text-primary)">
-            <li className="flex gap-2">
-              <span className="select-none text-emerald-400">✔</span>
-              <span>{t("freeAltProNoCost")}</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="select-none text-emerald-400">✔</span>
-              <span>{t("freeAltProLocalOrFreeApi")}</span>
-            </li>
+            {pros.slice(0, 4).map((p) => (
+              <li key={p} className="flex gap-2">
+                <span className="select-none text-emerald-400">✔</span>
+                <span>{p}</span>
+              </li>
+            ))}
           </ul>
         </div>
 
@@ -92,14 +121,12 @@ export function FreeAlternativeCard({
             {t("cons")}
           </p>
           <ul className="mt-2 space-y-1.5 text-sm text-(--text-primary)">
-            <li className="flex gap-2">
-              <span className="select-none text-rose-400">✖</span>
-              <span>{t("freeAltConLowerAccuracy")}</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="select-none text-rose-400">✖</span>
-              <span>{t("freeAltConSlower")}</span>
-            </li>
+            {cons.slice(0, 4).map((c) => (
+              <li key={c} className="flex gap-2">
+                <span className="select-none text-rose-400">✖</span>
+                <span>{c}</span>
+              </li>
+            ))}
           </ul>
         </div>
       </div>

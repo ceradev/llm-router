@@ -58,21 +58,21 @@ export function AdvancedOptionsModal({
         ? { duration: 0 }
         : { type: "tween", duration: 0.14, ease: "easeOut" };
     const segmentedBgClass =
-        "bg-[rgba(255,255,255,0.36)] dark:bg-(--segment-bg)";
+        "bg-[--segment-bg] dark:bg-(--segment-bg)";
     const segmentedActivePillClass =
-        "bg-[rgba(255,255,255,0.56)] dark:bg-(--surface-glass-hover) shadow-[0_0_18px_rgba(59,130,246,0.2)]";
+        "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) shadow-[0_0_18px_rgba(59,130,246,0.2)]";
     const useCaseOnClass =
-        "bg-[rgba(255,255,255,0.68)] dark:bg-(--surface-glass-hover) text-(--text-primary) shadow-[0_0_14px_rgba(59,130,246,0.16)]";
+        "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) text-(--text-primary) shadow-[0_0_14px_rgba(59,130,246,0.16)]";
     const useCaseOffClass =
-        "text-(--text-muted) hover:bg-[rgba(255,255,255,0.5)] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
+        "text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
     const providerTagClass =
-        "border-[#3B82F6]/35 bg-[rgba(255,255,255,0.66)] dark:bg-(--surface-glass)";
+        "border-[#3B82F6]/35 bg-[--surface-glass] dark:bg-(--surface-glass)";
     const providerListClass =
-        "bg-[rgba(255,255,255,0.48)] dark:bg-(--surface-glass)";
+        "bg-[--surface-glass] dark:bg-(--surface-glass)";
     const providerRowOnClass =
-        "bg-[rgba(255,255,255,0.68)] dark:bg-(--surface-glass-hover) text-(--text-primary)";
+        "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) text-(--text-primary)";
     const providerRowOffClass =
-        "text-(--text-muted) hover:bg-[rgba(255,255,255,0.5)] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
+        "text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
 
     if (!open) return null;
 

@@ -21,6 +21,11 @@ class ModelProfile:
     cost_score: int
     default_temperature: float
     capabilities: set[Capability] = field(default_factory=set)
+    supports_tools: bool = False
+    context_window: int | None = None
+    max_output_tokens: int | None = None
+    # Catalog tier from sync (e.g. free, premium, alternative).
+    tier: str = "alternative"
 
     @property
     def supports_json(self) -> bool:

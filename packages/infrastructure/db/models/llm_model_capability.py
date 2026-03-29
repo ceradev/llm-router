@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Column, Enum, UniqueConstraint
+from sqlalchemy.orm import relationship as sa_relationship
 from sqlmodel import Field, Relationship
 
 from packages.domain.models import Capability
@@ -28,5 +29,7 @@ class LLMModelCapability(TimestampMixin, Base, table=True):
         )
     )
 
-    model: "LLMModel" = Relationship(back_populates="capabilities")
+    model: Any = Relationship(
+        sa_relationship=sa_relationship("LLMModel", back_populates="capabilities"),
+    )
 

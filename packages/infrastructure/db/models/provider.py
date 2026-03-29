@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.orm import relationship as sa_relationship
 from sqlmodel import Field, Relationship
 
 from packages.infrastructure.db.base import Base, TimestampMixin
@@ -20,12 +21,18 @@ class Provider(TimestampMixin, Base, table=True):
     api_base_url: str | None = Field(default=None, max_length=255)
     is_active: bool = Field(default=True)
 
-    models: list["LLMModel"] = Relationship(
-        back_populates="provider",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    models: Any = Relationship(
+        sa_relationship=sa_relationship(
+            "LLMModel",
+            back_populates="provider",
+            cascade="all, delete-orphan",
+        ),
     )
-    sync_runs: list["ProviderSyncRun"] = Relationship(
-        back_populates="provider",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    sync_runs: Any = Relationship(
+        sa_relationship=sa_relationship(
+            "ProviderSyncRun",
+            back_populates="provider",
+            cascade="all, delete-orphan",
+        ),
     )
 
