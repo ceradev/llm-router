@@ -15,6 +15,7 @@ from packages.infrastructure.db.models.llm_attempt import LLMAttempt
 from packages.infrastructure.db.models.llm_execution import LLMExecution
 from packages.infrastructure.db.models.llm_feedback import LLMFeedback
 from packages.infrastructure.db.models.llm_model import LLMModel
+from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
 from packages.infrastructure.db.models.llm_request import LLMRequest
 from packages.infrastructure.db.models.provider import Provider
 
@@ -30,6 +31,7 @@ def requests_client_and_engine() -> Generator[tuple[TestClient, Engine], None, N
     )
     Provider.__table__.create(engine, checkfirst=True)
     LLMModel.__table__.create(engine, checkfirst=True)
+    LLMModelRoutingSettings.__table__.create(engine, checkfirst=True)
     LLMRequest.__table__.create(engine, checkfirst=True)
     LLMExecution.__table__.create(engine, checkfirst=True)
     LLMAttempt.__table__.create(engine, checkfirst=True)
@@ -144,7 +146,10 @@ def test_get_request_detail_200(
         session.refresh(req)
         rid = str(req.id)
 
-    r = client.get(f"/v1/requests/{rid}")
+    r = client.get(
+        f"/v1/requests/{rid}",
+        headers={"X-Session-Id": "sess-1"},
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["prompt"] == "full prompt text"
@@ -196,7 +201,7 @@ def test_post_feedback_201(
             intent="general",
             priority="normal",
             require_json=False,
-            session_id=None,
+            session_id="feedback-session",
             selected_model_id=mid,
             fallback_used=False,
         )
@@ -208,6 +213,7 @@ def test_post_feedback_201(
     r = client.post(
         f"/v1/requests/{rid}/feedback",
         json={"rating": 5, "comment": "great"},
+        headers={"X-Session-Id": "feedback-session"},
     )
     assert r.status_code == 201
     body = r.json()
@@ -229,7 +235,7 @@ def test_post_feedback_400_without_selected_model(
             intent="general",
             priority="normal",
             require_json=False,
-            session_id=None,
+            session_id="feedback-session-2",
             selected_model_id=None,
             fallback_used=False,
         )
@@ -241,5 +247,6 @@ def test_post_feedback_400_without_selected_model(
     r = client.post(
         f"/v1/requests/{rid}/feedback",
         json={"rating": 4},
+        headers={"X-Session-Id": "feedback-session-2"},
     )
     assert r.status_code == 400

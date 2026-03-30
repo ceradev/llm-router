@@ -112,3 +112,14 @@ def test_chatbot_use_case_adjusts_latency_weighting() -> None:
         > compute_model_score(model=slower, **kw, use_cases=["chatbot"]).total
     )
 
+
+def test_verified_confidence_bonus_prefers_verified_when_scores_equal() -> None:
+    verified = _base_profile(model_id="m/verified", evaluation_status="verified")
+    provisional = _base_profile(model_id="m/provisional", evaluation_status="provisional")
+
+    kw = dict(priority=Priority.BALANCED, priority_weight=100)
+    verified_score = compute_model_score(model=verified, **kw).total
+    provisional_score = compute_model_score(model=provisional, **kw).total
+
+    assert verified_score > provisional_score
+
