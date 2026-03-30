@@ -1,5 +1,6 @@
 import { motion, useReducedMotion, type Transition } from "framer-motion";
 import {
+    useEffect,
     useId,
     useRef,
     useState,
@@ -9,8 +10,9 @@ import { cn } from "@/lib/cn";
 import { SectionLabel } from "@/features/landing/components/advanced-options";
 import { IconChevronDown } from "@/shared/components";
 import type {Priority, ResponseDepth, UseCaseId } from "@/features/landing/types";
-import { PROVIDERS, USE_CASE_IDS, PRIORITY_OPTIONS, RESPONSE_DEPTH_OPTIONS, DEPTH_KEY_BY_VALUE } from "@/features/landing/data";
+import { FALLBACK_PROVIDER_OPTIONS, USE_CASE_IDS, PRIORITY_OPTIONS, RESPONSE_DEPTH_OPTIONS, DEPTH_KEY_BY_VALUE } from "@/features/landing/data";
 import { useModalFocusRestore, useModalEscapeClose, useProvidersDismiss } from "@/features/landing/hooks";
+import { fetchProviders, type ProviderOption } from "@/shared/api/providers";
 
 type Props = {
     open: boolean;
@@ -43,9 +45,38 @@ export function AdvancedOptionsModal({
     const reduceMotion = useReducedMotion() ?? false;
     const closeBtnRef = useRef<HTMLButtonElement>(null);
     const [providersOpen, setProvidersOpen] = useState(false);
+    const [providerOptions, setProviderOptions] = useState<ProviderOption[]>([]);
     const providersRef = useRef<HTMLDivElement>(null);
     const providersListId = useId();
-    const selectedProviders = PROVIDERS.filter((name) => providers.has(name));
+    const availableProviders = providerOptions.length > 0
+        ? providerOptions
+        : FALLBACK_PROVIDER_OPTIONS.map((provider) => ({
+            id: -1,
+            slug: provider.slug,
+            display_name: provider.display_name,
+            is_active: true,
+        }));
+    const selectedProviders = availableProviders.filter((provider) => providers.has(provider.slug));
+
+    useEffect(() => {
+        if (!open) return;
+
+        const controller = new AbortController();
+        void fetchProviders(controller.signal).then(
+            (rows) => {
+                if (!controller.signal.aborted) {
+                    setProviderOptions(rows);
+                }
+            },
+            () => {
+                if (!controller.signal.aborted) {
+                    setProviderOptions([]);
+                }
+            },
+        );
+
+        return () => controller.abort();
+    }, [open]);
 
     useModalFocusRestore(open, closeBtnRef);
     useModalEscapeClose(open, onClose);
@@ -130,6 +161,9 @@ export function AdvancedOptionsModal({
                 <div className="max-h-[min(70vh,640px)] overflow-y-auto p-5 sm:p-6">
                     <div className="relative overflow-visible rounded-2xl p-5 sm:p-6">
                         <div className="relative space-y-6">
+                            <p className="text-sm leading-relaxed text-(--text-muted)">
+                                {t("advancedOptionsIntro")}
+                            </p>
                             <div>
                                 <SectionLabel hint={t("priorityHint")}>
                                     {t("priority")}
@@ -219,15 +253,15 @@ export function AdvancedOptionsModal({
                                     >
                                         <div className="flex min-h-11 flex-1 flex-wrap items-center gap-2.5">
                                             {selectedProviders.length > 0 ? (
-                                                selectedProviders.map((name) => (
+                                                selectedProviders.map((provider) => (
                                                     <span
-                                                        key={name}
+                                                        key={provider.slug}
                                                         className={cn(
                                                             "rounded-lg border px-3.5 py-2 text-sm font-medium text-(--text-primary)",
                                                             providerTagClass,
                                                         )}
                                                     >
-                                                        {name}
+                                                        {provider.display_name}
                                                     </span>
                                                 ))
                                             ) : (
@@ -259,19 +293,19 @@ export function AdvancedOptionsModal({
                                                 providerListClass,
                                             )}
                                         >
-                                            {PROVIDERS.map((name) => {
-                                                const on = providers.has(name);
+                                            {availableProviders.map((provider) => {
+                                                const on = providers.has(provider.slug);
                                                 return (
-                                                    <li key={name} className="mb-1 last:mb-0">
+                                                    <li key={provider.slug} className="mb-1 last:mb-0">
                                                         <button
                                                             type="button"
-                                                            onClick={() => toggleProvider(name)}
+                                                            onClick={() => toggleProvider(provider.slug)}
                                                             className={cn(
                                                                 "flex w-full items-center justify-between rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors",
                                                                 on ? providerRowOnClass : providerRowOffClass,
                                                             )}
                                                         >
-                                                            <span>{name}</span>
+                                                            <span>{provider.display_name}</span>
                                                             <span
                                                                 className={cn(
                                                                     "h-2.5 w-2.5 rounded-full transition-colors",

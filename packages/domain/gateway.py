@@ -117,6 +117,9 @@ class RoutingDecision:
     applied_temperature: float
     candidates: list[ModelProfile]
     scored_candidates: tuple[ScoredCandidate, ...]
+    preferred_providers: list[str] = field(default_factory=list)
+    preferred_providers_applied: bool = False
+    preferred_providers_fallback_used: bool = False
 
 
 @dataclass(frozen=True)

@@ -5,10 +5,16 @@ import type {
   ModelDecision,
   ResultsDecisionPayload,
 } from "@/features/results/types"
-import { callGateway } from "./gateway"
+import { callGateway, type GatewayAdvancedOptions } from "./gateway"
 import { gatewayResponseToResultsPayload } from "./converters"
 
-export type RecommendRequest = { prompt: string; priority?: Priority }
+export type RecommendRequest = {
+  prompt: string
+  priority?: Priority
+  useCases?: string[]
+  preferredProviders?: string[]
+  responseDepth?: GatewayAdvancedOptions["responseDepth"]
+}
 
 function clamp01to100(n: number) {
   if (!Number.isFinite(n)) return 0
@@ -133,6 +139,9 @@ function mockDecisionPayload(_prompt: string, priority: Priority): ResultsDecisi
       cons,
       metrics: normalizeMetrics(metrics),
       actions,
+      modelTypeLabels: id === "top" ? ["chat", "json", "tools"] : ["chat", "json"],
+      publicStatusKey: "verified",
+      evaluationStatus: "verified",
     }
   }
 
@@ -172,6 +181,7 @@ function mockDecisionPayload(_prompt: string, priority: Priority): ResultsDecisi
     freeAlternative: free,
     categoryPicks,
     extraAlternatives,
+    isMock: true,
   }
 }
 
@@ -195,7 +205,16 @@ export async function fetchRecommendation(
   }
 
   try {
-    const data = await callGateway(req.prompt, priorityForGateway(req), controller.signal)
+    const data = await callGateway(
+      req.prompt,
+      priorityForGateway(req),
+      {
+        useCases: req.useCases,
+        preferredProviders: req.preferredProviders,
+        responseDepth: req.responseDepth,
+      },
+      controller.signal,
+    )
     const payload = gatewayResponseToResultsPayload(data)
     return {
       topPick: coerceModelDecision(payload.topPick),
@@ -205,6 +224,7 @@ export async function fetchRecommendation(
       categoryPicks: payload.categoryPicks.map(coerceCategoryPick),
       extraAlternatives: payload.extraAlternatives.map(coerceModelDecision),
       routing: payload.routing,
+      isMock: false,
     }
   } catch (e) {
     if (controller.signal.aborted) throw e

@@ -26,6 +26,7 @@ class LLMModelRoutingSettings(TimestampMixin, Base, table=True):
     priority_weight: int = Field(default=100)
     allow_fallback: bool = Field(default=True)
     enabled_for_routing: bool = Field(default=True)
+    is_evaluated_for_routing: bool = Field(default=False)
     notes: str | None = Field(default=None)
 
     model: Any = Relationship(

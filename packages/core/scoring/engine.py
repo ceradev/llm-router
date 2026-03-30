@@ -99,6 +99,14 @@ def compute_model_score(
 
     base_total = quality_component + latency_component + cost_component + priority_component
 
+    confidence_bonus = 0.0
+    try:
+        status = (model.evaluation_status or "").strip().lower()
+    except Exception:
+        status = ""
+    if status == "verified":
+        confidence_bonus = 0.08
+
     capability_bonus, use_case_bonus, provider_bonus = _routing_bonuses(
         model=model,
         requires_code=requires_code,
@@ -106,7 +114,7 @@ def compute_model_score(
         uc_norm=uc_norm,
         preferred_providers=preferred_providers,
     )
-    routing_bonus = capability_bonus + use_case_bonus + provider_bonus
+    routing_bonus = capability_bonus + use_case_bonus + provider_bonus + confidence_bonus
 
     total = base_total + routing_bonus
 
@@ -115,7 +123,7 @@ def compute_model_score(
         f"(quality={quality_component:.2f}, latency={latency_component:.2f}, "
         f"cost={cost_component:.2f}, priority={priority_component:.2f}, "
         f"routing_bonus={routing_bonus:.2f} "
-        f"[capability={capability_bonus:.2f}, use_case={use_case_bonus:.2f}, provider={provider_bonus:.2f}]; "
+        f"[capability={capability_bonus:.2f}, use_case={use_case_bonus:.2f}, provider={provider_bonus:.2f}, confidence={confidence_bonus:.2f}]; "
         f"priority='{priority.value}')"
     )
 

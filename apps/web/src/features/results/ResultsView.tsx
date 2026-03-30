@@ -47,7 +47,7 @@ function metricsForPriority(priority: Priority) {
 }
 
 function mockModelId(name: string): string {
-  return `mock/${name.toLowerCase().replace(/\s+/g, "-")}`
+  return `mock/${name.toLowerCase().replaceAll(/\s+/g, "-")}`
 }
 
 function uniqueBenchmarkModels(models: ModelDecision[]): ModelDecision[] {
@@ -159,6 +159,9 @@ export function ResultsView({
     cost: { rel: m.costRel },
     contextWindowTokens: 200_000,
     maxOutputTokens: 8192,
+    modelTypeLabels: id === "top" ? ["chat", "json", "tools"] : ["chat", "json"],
+    publicStatusKey: "verified",
+    evaluationStatus: "verified",
     why: id === "top" ? deriveWhy(m) : [],
     pros: [
       m.note,
@@ -233,11 +236,38 @@ export function ResultsView({
     extraAlternatives: rankedRunners.slice(0, 2).map((m, idx) =>
       toDecisionModel(m, `extra${idx + 1}`),
     ),
+    isMock: true,
   }
 
   const payload = results ?? fallbackPayload
   const top = payload.topPick
   const runners = payload.extraAlternatives
+  const routing = payload.routing
+
+  const providersBanner = useMemo(() => {
+    if (!routing) return null
+    if (!routing.preferredProvidersApplied && !routing.preferredProvidersFallbackUsed) return null
+
+    const names = routing.preferredProviders.length
+      ? routing.preferredProviders.join(", ")
+      : ""
+
+    if (routing.preferredProvidersFallbackUsed) {
+      return {
+        tone: "warn" as const,
+        title: "Preferred providers unavailable.",
+        body: names
+          ? `No eligible models found for: ${names}. Showing all providers instead.`
+          : "No eligible models found for preferred providers. Showing all providers instead.",
+      }
+    }
+
+    return {
+      tone: "info" as const,
+      title: "Filtering by preferred providers.",
+      body: names ? `Showing only: ${names}.` : "Showing only preferred providers.",
+    }
+  }, [routing])
 
   const benchmarkModels = useMemo(
     () =>
@@ -277,6 +307,26 @@ export function ResultsView({
           onHistoryOpen={onHistoryOpen}
           historyOpen={historyOpen}
         />
+
+        {payload.isMock ? (
+          <div className="mb-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <span className="font-semibold">Offline/mock ranking.</span>{" "}
+            This is fallback data (not the backend evaluator). Restore API connectivity to see real routing scores.
+          </div>
+        ) : null}
+
+        {!payload.isMock && providersBanner ? (
+          <div
+            className={
+              providersBanner.tone === "warn"
+                ? "mb-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                : "mb-6 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100"
+            }
+          >
+            <span className="font-semibold">{providersBanner.title}</span>{" "}
+            {providersBanner.body}
+          </div>
+        ) : null}
 
         <motion.header
           variants={container}
@@ -334,41 +384,6 @@ export function ResultsView({
           animate="show"
           className="mt-6 space-y-4"
         >
-          <motion.section
-            variants={item}
-            className="rounded-xl border border-(--border-subtle) bg-(--surface-glass)/80 p-4 text-sm leading-relaxed text-(--text-muted) backdrop-blur-sm sm:p-5"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted)">
-              {t("modelsLegendTitle")}
-            </p>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              <li>
-                <span className="font-medium text-(--text-primary)">{t("quality")}: </span>
-                {t("legendQuality")}
-              </li>
-              <li>
-                <span className="font-medium text-(--text-primary)">{t("cost")}: </span>
-                {t("legendCost")}
-              </li>
-              <li>
-                <span className="font-medium text-(--text-primary)">{t("speed")}: </span>
-                {t("legendSpeed")}
-              </li>
-              <li>
-                <span className="font-medium text-(--text-primary)">
-                  {t("labelOutputTokens")}:{" "}
-                </span>
-                {t("legendTokens")}
-              </li>
-              <li className="sm:col-span-2">
-                <span className="font-medium text-(--text-primary)">
-                  {t("labelContext")}:{" "}
-                </span>
-                {t("legendContext")}
-              </li>
-            </ul>
-          </motion.section>
-
           <motion.div
             variants={item}
             className="relative overflow-hidden rounded-2xl border border-[#3B82F6]/30 bg-linear-to-br from-[#3B82F6]/15 via-(--surface-glass) to-[#0EA5E9]/10 p-5 shadow-[0_0_40px_rgba(59,130,246,0.12)] backdrop-blur-xl sm:p-6"
@@ -385,17 +400,22 @@ export function ResultsView({
                 {top.name}
               </h2>
               <p className="mt-1 text-base text-(--text-accent)">{top.provider}</p>
-              <ModelCapabilityBadges model={top} className="mt-3" />
-              {top.rankingReasonKey ? (
-                <p className="mt-3 text-sm leading-relaxed text-(--text-muted)">
-                  {t(top.rankingReasonKey as TranslationKey)}
+
+              <div className="mt-5">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-(--text-muted)">
+                  {t("resultWhyHeading")}
                 </p>
-              ) : null}
-              {!top.rankingReasonKey && top.why?.length > 0 ? (
-                <div className="mt-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-wider text-(--text-muted)">
-                    {t("whyThisModel")}
+                {top.rankingReasonKey ? (
+                  <p className="mt-2 text-base leading-relaxed text-(--text-primary)">
+                    {t(top.rankingReasonKey as TranslationKey)}
                   </p>
+                ) : null}
+                {!top.rankingReasonKey && routing?.routingReason && !payload.isMock ? (
+                  <p className="mt-2 text-base leading-relaxed text-(--text-primary)">
+                    {routing.routingReason}
+                  </p>
+                ) : null}
+                {!top.rankingReasonKey && !routing?.routingReason && top.why && top.why.length > 0 ? (
                   <ul className="mt-2 space-y-1.5 text-base leading-relaxed text-(--text-muted)">
                     {top.why.slice(0, 5).map((w) => (
                       <li key={w} className="flex gap-2">
@@ -404,35 +424,40 @@ export function ResultsView({
                       </li>
                     ))}
                   </ul>
-                </div>
-              ) : null}
-              {!top.rankingReasonKey && (top.why?.length ?? 0) === 0 ? (
-                <p className="mt-4 text-base leading-relaxed text-(--text-muted)">
-                  {t("whyThisModelFallback")}
-                </p>
-              ) : null}
-              {top.rankingReasonKey && top.why?.length > 0 ? (
-                <div className="mt-4 border-t border-(--border-subtle) pt-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-wider text-(--text-muted)">
-                    {t("whyThisModel")}
+                ) : null}
+                {!top.rankingReasonKey &&
+                !routing?.routingReason &&
+                (top.why?.length ?? 0) === 0 &&
+                payload.isMock ? (
+                  <p className="mt-2 text-base leading-relaxed text-(--text-muted)">
+                    {t("whyThisModelFallback")}
                   </p>
-                  <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-(--text-muted)">
-                    {top.why.slice(0, 3).map((w) => (
-                      <li key={w} className="flex gap-2">
-                        <span className="mt-0.5 select-none text-(--text-accent)">•</span>
-                        <span>{w}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+                ) : null}
+                {top.rankingReasonKey && top.why && top.why.length > 0 ? (
+                  <details className="mt-3 rounded-lg border border-(--border-subtle) bg-(--surface-glass)/60 px-3 py-2 text-left">
+                    <summary className="cursor-pointer text-[11px] font-semibold text-(--text-muted)">
+                      {t("whyThisModel")}
+                    </summary>
+                    <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-(--text-muted)">
+                      {top.why.slice(0, 3).map((w) => (
+                        <li key={w} className="flex gap-2">
+                          <span className="mt-0.5 select-none text-(--text-accent)">•</span>
+                          <span>{w}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </div>
+
+              <ModelCapabilityBadges model={top} className="mt-5" />
 
               {top.rankingExplanation ? (
                 <details className="mt-4 rounded-lg border border-(--border-subtle) bg-(--surface-glass) px-3 py-2 text-left">
                   <summary className="cursor-pointer text-[12px] font-semibold text-(--text-muted)">
                     {t("scoringDetailTitle")}
                   </summary>
-                  <p className="mt-2 font-mono text-[11px] leading-relaxed break-words text-(--text-muted)">
+                  <p className="mt-2 font-mono text-[11px] leading-relaxed wrap-break-word text-(--text-muted)">
                     {top.rankingExplanation}
                   </p>
                 </details>
@@ -508,7 +533,50 @@ export function ResultsView({
           </motion.section>
 
           <motion.div variants={item}>
-            <BenchmarkChart models={benchmarkModels} />
+            <details className="group rounded-2xl border border-(--border-subtle) bg-(--surface-glass)/60 p-4 backdrop-blur-sm open:bg-(--surface-glass)/80 sm:p-5">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-(--text-muted) [&::-webkit-details-marker]:hidden">
+                <span className="inline-flex items-center gap-2">
+                  {t("advancedComparisonsTitle")}
+                  <span className="text-[11px] font-normal text-(--text-muted) opacity-80 group-open:hidden">
+                    — {t("benchmark")}
+                  </span>
+                </span>
+              </summary>
+              <div className="mt-4 space-y-5 border-t border-(--border-subtle) pt-4">
+                <section className="text-sm leading-relaxed text-(--text-muted)">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-(--text-muted)">
+                    {t("modelsLegendTitle")}
+                  </p>
+                  <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <li>
+                      <span className="font-medium text-(--text-primary)">{t("quality")}: </span>
+                      {t("legendQuality")}
+                    </li>
+                    <li>
+                      <span className="font-medium text-(--text-primary)">{t("cost")}: </span>
+                      {t("legendCost")}
+                    </li>
+                    <li>
+                      <span className="font-medium text-(--text-primary)">{t("speed")}: </span>
+                      {t("legendSpeed")}
+                    </li>
+                    <li>
+                      <span className="font-medium text-(--text-primary)">
+                        {t("labelOutputTokens")}:{" "}
+                      </span>
+                      {t("legendTokens")}
+                    </li>
+                    <li className="sm:col-span-2">
+                      <span className="font-medium text-(--text-primary)">
+                        {t("labelContext")}:{" "}
+                      </span>
+                      {t("legendContext")}
+                    </li>
+                  </ul>
+                </section>
+                <BenchmarkChart models={benchmarkModels} />
+              </div>
+            </details>
           </motion.div>
 
           {runners.length > 0 ? (
@@ -602,10 +670,14 @@ function CategoryHighlightCard({
         {t(pick.reasonKey as TranslationKey)}
       </p>
       {model.rankingExplanation ? (
-        <p className="mt-2 text-[11px] leading-relaxed text-(--text-muted)">
-          <span className="font-semibold text-(--text-primary)">{t("rankingScoreExplanation")}: </span>
-          {truncate(model.rankingExplanation, 200)}
-        </p>
+        <details className="mt-2 rounded-lg border border-(--border-subtle) bg-(--surface-glass)/50 px-2 py-1.5 text-left">
+          <summary className="cursor-pointer text-[10px] font-semibold text-(--text-muted)">
+            {t("scoringDetailTitle")}
+          </summary>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-(--text-muted)">
+            {truncate(model.rankingExplanation, 200)}
+          </p>
+        </details>
       ) : null}
       <ModelCapabilityBadges model={model} className="mt-2" />
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-(--border-subtle) pt-3 text-[11px] text-(--text-muted)">
@@ -647,10 +719,14 @@ function RunnerRow({
           <p className="text-[12px] text-(--text-muted)">{model.provider}</p>
           <ModelCapabilityBadges model={model} className="mt-2" />
           {model.rankingExplanation ? (
-            <p className="mt-2 text-[11px] leading-relaxed text-(--text-muted)">
-              <span className="font-semibold text-(--text-primary)">{t("rankingScoreExplanation")}: </span>
-              {truncate(model.rankingExplanation, 220)}
-            </p>
+            <details className="mt-2 rounded-lg border border-(--border-subtle) bg-(--surface-glass)/50 px-2 py-1.5 text-left">
+              <summary className="cursor-pointer text-[10px] font-semibold text-(--text-muted)">
+                {t("scoringDetailTitle")}
+              </summary>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-(--text-muted)">
+                {truncate(model.rankingExplanation, 220)}
+              </p>
+            </details>
           ) : null}
           <p className="mt-2 text-[11px] text-(--text-muted)">
             <span className="text-(--text-muted)">{t("labelContext")}: </span>

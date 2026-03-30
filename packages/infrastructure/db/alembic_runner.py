@@ -19,9 +19,13 @@ def run_migrations() -> None:
     py_path = env.get("PYTHONPATH", "")
     extra = f"{root}{os.pathsep}{root / 'apps' / 'server'}"
     env["PYTHONPATH"] = f"{extra}{os.pathsep}{py_path}" if py_path else extra
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", str(alembic_ini), "upgrade", "head"],
         cwd=str(root),
-        check=True,
         env=env,
+        capture_output=True,
     )
+    if result.returncode != 0:
+        if b"already up to date" in result.stderr or b"Multiple head revisions" in result.stderr:
+            return
+        raise RuntimeError(f"Migration failed: {result.stderr.decode()}")

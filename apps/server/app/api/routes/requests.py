@@ -189,17 +189,19 @@ def list_requests(
 def get_request_detail(
     request_id: UUID,
     session: Annotated[Session, Depends(get_db_session)],
-    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
+    x_session_id: Annotated[str, Header(alias="X-Session-Id")],
 ) -> RequestDetailResponse:
-    repo = RequestRepository(session)
-    if x_session_id is not None:
-        row = repo.get_request_by_id(request_id)
-        if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
-        if row.session_id != x_session_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session mismatch")
+    if not x_session_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-Session-Id required")
 
-    full = repo.get_request_with_details(request_id=request_id, session_id=None)
+    repo = RequestRepository(session)
+    row = repo.get_request_by_id(request_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
+    if row.session_id != x_session_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session mismatch")
+
+    full = repo.get_request_with_details(request_id=request_id, session_id=x_session_id)
     if full is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
     return _to_request_detail(full)
@@ -213,13 +215,16 @@ def submit_feedback(
     request_id: UUID,
     payload: FeedbackRequest,
     session: Annotated[Session, Depends(get_db_session)],
-    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
+    x_session_id: Annotated[str, Header(alias="X-Session-Id")],
 ) -> FeedbackDetail:
+    if not x_session_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-Session-Id required")
+
     repo = RequestRepository(session)
     row = repo.get_request_by_id(request_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
-    if x_session_id is not None and row.session_id != x_session_id:
+    if row.session_id != x_session_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session mismatch")
     if row.selected_model_id is None:
         raise HTTPException(

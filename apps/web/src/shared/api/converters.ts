@@ -8,7 +8,11 @@ import type {
 
 function formatModelName(modelId: string): string {
   const name = modelId.split("/").pop() ?? modelId
-  return name.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  return name
+    .replaceAll("-", " ")
+    .split(" ")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(" ")
 }
 
 function formatProvider(modelId: string): string {
@@ -57,6 +61,13 @@ function toModelDecision(
   const ctx = rankItem.context_window ?? undefined
   const maxOut = rankItem.max_output_tokens ?? null
   const caps = rankItem.capabilities ?? []
+  let costRel: "low" | "medium" | "high" = "high"
+  if (rankItem.cost_score >= 4) {
+    costRel = "low"
+  } else if (rankItem.cost_score >= 3) {
+    costRel = "medium"
+  }
+  const whyRouting = options.isTop ? options.why : []
   return {
     id,
     modelId: rankItem.model_id,
@@ -67,13 +78,10 @@ function toModelDecision(
       options.measuredLatencyMs != null && options.measuredLatencyMs >= 0
         ? options.measuredLatencyMs
         : undefined,
-    cost: {
-      rel:
-        rankItem.cost_score >= 4 ? "low" : rankItem.cost_score >= 3 ? "medium" : "high",
-    },
+    cost: { rel: costRel },
     contextWindowTokens: ctx,
     maxOutputTokens: maxOut,
-    why: options.isTop ? options.why : [],
+    why: whyRouting,
     pros: rankItem.pros ?? [],
     cons: rankItem.cons ?? [],
     metrics: {
@@ -86,11 +94,21 @@ function toModelDecision(
     rankingReasonKey: options.rankingReasonKey,
     sameAsBestOverall: options.sameAsBestOverall,
     rankingExplanation: rankItem.explanation,
+    modelCategories: rankItem.model_categories ?? [],
+    technicalCapabilities: rankItem.technical_capabilities ?? [],
+    verificationScopes: rankItem.verification_scopes ?? [],
     capabilities: caps,
     supportsJson: rankItem.supports_json,
     supportsTools: rankItem.supports_tools,
     isFreeTier: rankItem.is_free,
     tier: rankItem.tier,
+    evaluationStatus: rankItem.evaluation_status ?? "cataloged",
+    supportsVision: rankItem.supports_vision ?? false,
+    inputModalities: rankItem.input_modalities ?? [],
+    outputModalities: rankItem.output_modalities ?? [],
+    modelTypeLabels: rankItem.model_type_labels ?? [],
+    isVerified: rankItem.is_verified ?? false,
+    publicStatusKey: rankItem.public_status_key ?? null,
   }
 }
 
@@ -169,6 +187,9 @@ function buildRoutingInfo(data: GatewayBackendResponse): ResultsRoutingInfo {
       latencyMs: a.latency_ms,
     })),
     candidateModels: data.candidate_models,
+    preferredProviders: data.preferred_providers ?? [],
+    preferredProvidersApplied: Boolean(data.preferred_providers_applied),
+    preferredProvidersFallbackUsed: Boolean(data.preferred_providers_fallback_used),
   }
 }
 
@@ -181,11 +202,12 @@ export function gatewayResponseToResultsPayload(
   }
 
   const summary = data.ranking_summary
-  const whyRouting = data.explanation
-    ? [data.explanation]
-    : data.routing_reason
-      ? [data.routing_reason]
-      : []
+  let whyRouting: string[] = []
+  if (data.explanation) {
+    whyRouting = [data.explanation]
+  } else if (data.routing_reason) {
+    whyRouting = [data.routing_reason]
+  }
 
   const topPick = decisionFromHighlight(data, summary.best_overall, "top", whyRouting, true)
 

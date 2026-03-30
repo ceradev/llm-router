@@ -10,6 +10,12 @@ from packages.infrastructure.db.models.llm_model_capability import LLMModelCapab
 from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
 from packages.infrastructure.db.models.llm_request import LLMRequest
 from packages.infrastructure.db.models.request_analysis import RequestAnalysis
+from packages.infrastructure.db.models.model_benchmark_run import (
+    BenchmarkKind,
+    BenchmarkRunStatus,
+    BenchmarkScope,
+    ModelBenchmarkRun,
+)
 from packages.infrastructure.db.models.model_evaluation import ModelEvaluation
 from packages.infrastructure.db.models.llm_execution import LLMExecution
 from packages.infrastructure.db.models.llm_attempt import LLMAttempt
@@ -23,6 +29,10 @@ __all__ = [
     "LLMModelCapability",
     "LLMModelRoutingSettings",
     "LLMRequest",
+    "BenchmarkKind",
+    "BenchmarkRunStatus",
+    "BenchmarkScope",
+    "ModelBenchmarkRun",
     "ModelEvaluation",
     "Provider",
     "ProviderSyncRun",

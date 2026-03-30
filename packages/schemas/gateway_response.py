@@ -30,9 +30,20 @@ class RankedModelResponse(BaseModel):
     max_output_tokens: int | None = None
     supports_json: bool = False
     supports_tools: bool = False
+    model_categories: list[str] = Field(default_factory=list)
+    technical_capabilities: list[str] = Field(default_factory=list)
+    verification_scopes: list[str] = Field(default_factory=list)
+    # Legacy category field kept for compatibility with existing clients.
     capabilities: list[str] = Field(default_factory=list)
     is_free: bool = False
     tier: str = "alternative"
+    evaluation_status: str = "cataloged"
+    supports_vision: bool = False
+    input_modalities: list[str] = Field(default_factory=list)
+    output_modalities: list[str] = Field(default_factory=list)
+    model_type_labels: list[str] = Field(default_factory=list)
+    is_verified: bool = False
+    public_status_key: str | None = None
 
 
 class RankingHighlightResponse(BaseModel):
@@ -75,6 +86,9 @@ class GatewayResponse(BaseModel):
     fallback_used: bool
     candidate_models: list[str]
     attempts: list[InvocationAttemptResponse]
+    preferred_providers: list[str] = Field(default_factory=list)
+    preferred_providers_applied: bool = False
+    preferred_providers_fallback_used: bool = False
 
 
 class ModelSummaryResponse(BaseModel):
@@ -86,4 +100,7 @@ class ModelSummaryResponse(BaseModel):
     latency_score: int
     cost_score: int
     supports_json: bool
+    model_categories: list[str] = Field(default_factory=list)
+    technical_capabilities: list[str] = Field(default_factory=list)
+    verification_scopes: list[str] = Field(default_factory=list)
     capabilities: list[Capability]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -9,11 +10,17 @@ from packages.domain.gateway import Priority
 from packages.domain.models import Capability, ModelProfile
 from sqlalchemy import delete
 
-from packages.infrastructure.db.models.llm_model import LLMModel
+from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
 from packages.infrastructure.db.models.llm_model_capability import LLMModelCapability
 from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
 from packages.infrastructure.db.models.provider import Provider
 from packages.infrastructure.db.seed_types import SeededModelUpsertParams
+
+
+def _modalities_tuple(raw: list[str] | None) -> tuple[str, ...]:
+    if not raw:
+        return ()
+    return tuple(str(x).strip().lower() for x in raw if str(x).strip())
 
 
 @dataclass(frozen=True)
@@ -34,6 +41,26 @@ class ModelRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def _capabilities_for_model(self, *, llm_model: LLMModel, extra_caps: dict[int, set[Capability]]) -> set[Capability]:
+        capabilities: set[Capability] = {Capability.GENERAL}
+        if llm_model.supports_json:
+            capabilities.add(Capability.JSON)
+        if llm_model.id is not None:
+            capabilities |= extra_caps.get(llm_model.id, set())
+        return capabilities
+
+    def _routing_scores_or_defaults(
+        self, routing: LLMModelRoutingSettings | None
+    ) -> tuple[int, int, int, float]:
+        if routing is None:
+            return (0, 0, 0, 0.2)
+        return (
+            routing.quality_score,
+            routing.latency_score,
+            routing.cost_score,
+            routing.default_temperature,
+        )
+
     def _capability_rows_for_models(self, model_ids: list[int]) -> dict[int, set[Capability]]:
         if not model_ids:
             return {}
@@ -52,6 +79,7 @@ class ModelRepository:
         *,
         priority: Priority,
         require_json: bool,
+        provider_slugs: list[str] | None = None,
     ) -> list[ModelRoutingRow]:
         stmt = (
             select(LLMModel, Provider, LLMModelRoutingSettings)
@@ -61,7 +89,18 @@ class ModelRepository:
             .where(LLMModel.is_active.is_(True))
             .where(LLMModel.is_available.is_(True))
             .where(LLMModelRoutingSettings.enabled_for_routing.is_(True))
+            .where(LLMModelRoutingSettings.is_evaluated_for_routing.is_(True))
+            .where(
+                LLMModel.evaluation_status.in_(
+                    (ModelEvaluationStatus.VERIFIED, ModelEvaluationStatus.PROVISIONAL)
+                )
+            )
         )
+
+        if provider_slugs:
+            normalized = [str(s).strip().lower() for s in provider_slugs if str(s).strip()]
+            if normalized:
+                stmt = stmt.where(func.lower(Provider.slug).in_(normalized))
 
         if require_json:
             stmt = stmt.where(LLMModel.supports_json.is_(True))
@@ -93,6 +132,10 @@ class ModelRepository:
                 context_window=llm_model.context_window,
                 max_output_tokens=llm_model.max_output_tokens,
                 tier=llm_model.tier,
+                evaluation_status=llm_model.evaluation_status.value,
+                supports_vision=llm_model.supports_vision,
+                input_modalities=_modalities_tuple(llm_model.input_modalities),
+                output_modalities=_modalities_tuple(llm_model.output_modalities),
             )
             mapped.append(
                 ModelRoutingRow(
@@ -119,17 +162,8 @@ class ModelRepository:
 
         models: list[ModelProfile] = []
         for llm_model, provider, routing in rows:
-            capabilities: set[Capability] = {Capability.GENERAL}
-            if llm_model.supports_json:
-                capabilities.add(Capability.JSON)
-            if llm_model.id is not None:
-                for cap in extra_caps.get(llm_model.id, ()):
-                    capabilities.add(cap)
-
-            quality_score = routing.quality_score if routing else 0
-            latency_score = routing.latency_score if routing else 0
-            cost_score = routing.cost_score if routing else 0
-            default_temperature = routing.default_temperature if routing else 0.2
+            capabilities = self._capabilities_for_model(llm_model=llm_model, extra_caps=extra_caps)
+            quality_score, latency_score, cost_score, default_temperature = self._routing_scores_or_defaults(routing)
 
             models.append(
                 ModelProfile(
@@ -144,6 +178,10 @@ class ModelRepository:
                     context_window=llm_model.context_window,
                     max_output_tokens=llm_model.max_output_tokens,
                     tier=llm_model.tier,
+                    evaluation_status=llm_model.evaluation_status.value,
+                    supports_vision=llm_model.supports_vision,
+                    input_modalities=_modalities_tuple(llm_model.input_modalities),
+                    output_modalities=_modalities_tuple(llm_model.output_modalities),
                 )
             )
         return models
@@ -179,6 +217,7 @@ class ModelRepository:
             caps.add(Capability.JSON)
 
         if existing is None:
+            now = datetime.now(timezone.utc)
             row = LLMModel(
                 provider_id=provider_id,
                 external_model_id=params.external_model_id[:255],
@@ -192,6 +231,10 @@ class ModelRepository:
                 tier=params.tier,
                 context_window=params.context_window,
                 max_output_tokens=params.max_output_tokens,
+                evaluation_status=ModelEvaluationStatus.PROVISIONAL,
+                evaluation_confidence=0.85,
+                last_evaluated_at=now,
+                evaluation_version="seeded",
             )
             self.session.add(row)
             self.session.flush()
@@ -217,6 +260,10 @@ class ModelRepository:
         existing.tier = params.tier
         existing.context_window = params.context_window
         existing.max_output_tokens = params.max_output_tokens
+        existing.evaluation_status = ModelEvaluationStatus.PROVISIONAL
+        existing.evaluation_confidence = 0.85
+        existing.last_evaluated_at = datetime.now(timezone.utc)
+        existing.evaluation_version = "seeded"
         self.session.add(existing)
         self.session.flush()
         self._upsert_routing_settings(
@@ -252,7 +299,10 @@ class ModelRepository:
                     default_temperature=default_temperature,
                     priority_weight=priority_weight,
                     allow_fallback=True,
-                    enabled_for_routing=True,
+                    # Curated scores are not execution-verified; competitive routing requires
+                    # `evaluation_status=verified` after a live benchmark.
+                    enabled_for_routing=False,
+                    is_evaluated_for_routing=False,
                     notes=None,
                 )
             )
@@ -262,7 +312,8 @@ class ModelRepository:
         rs.cost_score = cost_score
         rs.default_temperature = default_temperature
         rs.priority_weight = priority_weight
-        rs.enabled_for_routing = True
+        rs.enabled_for_routing = False
+        rs.is_evaluated_for_routing = False
         self.session.add(rs)
 
     def count_routing_ready_models(self, *, require_json: bool = False) -> int:
@@ -275,6 +326,8 @@ class ModelRepository:
             .where(LLMModel.is_active.is_(True))
             .where(LLMModel.is_available.is_(True))
             .where(LLMModelRoutingSettings.enabled_for_routing.is_(True))
+            .where(LLMModelRoutingSettings.is_evaluated_for_routing.is_(True))
+            .where(LLMModel.evaluation_status == ModelEvaluationStatus.VERIFIED)
         )
         if require_json:
             stmt = stmt.where(LLMModel.supports_json.is_(True))

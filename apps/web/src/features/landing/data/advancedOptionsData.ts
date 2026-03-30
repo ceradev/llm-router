@@ -8,7 +8,11 @@ export const USE_CASE_IDS: { id: UseCaseId; titleKey: TranslationKey }[] = [
   { id: "batch", titleKey: "useCaseBatch" },
 ];
 
-export const PROVIDERS = ["OpenAI", "Anthropic", "Google"] as const;
+export const FALLBACK_PROVIDER_OPTIONS = [
+  { slug: "openai", display_name: "OpenAI" },
+  { slug: "anthropic", display_name: "Anthropic" },
+  { slug: "google", display_name: "Google" },
+] as const;
 
 export const PRIORITY_OPTIONS: Priority[] = ["quality", "speed", "cost"];
 

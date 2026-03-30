@@ -8,9 +8,12 @@ export const translations = {
     heroSubtitle: 'Optimize cost, speed, and quality — automatically',
     heroAnnouncementComingSoon: 'Coming soon',
     heroAnnouncementText: 'Available for the terminal and as a VS Code extension',
-    promptPlaceholder: 'Describe your task... (e.g. Summarize this article in one sentence)',
-    promptLabel: 'Describe your task',
+    promptPlaceholder:
+      'Paste your task or prompt… (e.g. Summarize this article in one sentence)',
+    promptLabel: 'Your prompt',
     advancedOptions: 'Advanced options',
+    advancedOptionsIntro:
+      'Optional—they change how we rank models for this prompt: priority, use case, preferred providers, and response depth.',
     analyse: 'Analyse',
     priority: 'Priority',
     quality: 'Quality',
@@ -19,8 +22,10 @@ export const translations = {
     useCase: 'Use case',
     preferredProviders: 'Preferred providers',
     responseDepth: 'Response depth',
-    responseDepthHint: 'Controls how detailed and thorough the response should be',
-    responseDepthHelper: 'Controls how detailed and thorough the response should be',
+    responseDepthHint:
+      'Steers routing toward models that fit the kind of answer you want (brief vs thorough).',
+    responseDepthHelper:
+      'Sets how deep or lengthy you expect the output to be so rankings stay aligned.',
     depthShort: 'Short',
     depthBalanced: 'Balanced',
     depthDetailed: 'Detailed',
@@ -32,9 +37,12 @@ export const translations = {
     useCaseChatbotBlurb: 'Conversation optimized',
     useCaseBatch: 'Batch',
     useCaseBatchBlurb: 'Large scale processing',
-    priorityHint: 'What matters most when we rank models for your prompt.',
-    useCaseHint: 'Helps bias routing toward models that excel in your environment.',
-    providersHint: 'Only consider models from these vendors when possible.',
+    priorityHint:
+      'Changes how we weigh quality, speed, and cost when ordering candidates for your prompt.',
+    useCaseHint:
+      'Biases ranking toward models that fit real contexts—IDE, API, chatbot, or batch work.',
+    providersHint:
+      'When several models are viable, we favor these vendors—without ignoring a clearly better fit.',
     // responseDepthHint is used in the Advanced Options modal tooltip.
     history: 'History',
     close: 'Close',
@@ -140,6 +148,19 @@ export const translations = {
     tierAlternative: 'Alternative',
     badgeJson: 'JSON',
     badgeTools: 'Tools',
+    typeLabel_chat: 'Chat',
+    typeLabel_code: 'Code',
+    typeLabel_analysis: 'Analysis',
+    typeLabel_json: 'JSON',
+    typeLabel_tools: 'Tools',
+    typeLabel_multimodal: 'Multimodal',
+    typeLabel_vision: 'Vision',
+    publicStatus_verified: 'Verified',
+    publicStatus_provisional: 'Estimated',
+    publicStatus_available: 'Available',
+    publicStatus_deprecated: 'Deprecated',
+    advancedComparisonsTitle: 'Technical comparison',
+    resultWhyHeading: 'Why this recommendation',
     cap_general: 'General',
     cap_analysis: 'Analysis',
     cap_code: 'Code',
@@ -165,29 +186,36 @@ export const translations = {
     apply: 'Apply',
 
     howItWorksKicker: 'How it works',
-    howItWorksTitle: 'From prompt to best model — in seconds',
-    howItWorksCard1Title: 'Describe the task',
-    howItWorksCard1Desc: 'Paste a prompt, ticket, or spec. We’ll infer intent and constraints.',
-    howItWorksCard2Title: 'Route with signals',
-    howItWorksCard2Desc: 'Bias toward quality, speed, cost — plus your use case and providers.',
-    howItWorksCard3Title: 'Get a clear pick',
-    howItWorksCard3Desc: 'A top recommendation with trade-offs you can actually trust.',
+    howItWorksTitle: 'What happens after you paste a prompt',
+    howItWorksCard1Title: 'We read the task',
+    howItWorksCard1Desc:
+      'You paste what you need done. We analyze the task and match it to models that fit—not a generic model list.',
+    howItWorksCard2Title: 'You tune what matters',
+    howItWorksCard2Desc:
+      'Priority, use case, preferred providers, and response depth change how we rank options. Skip anything you don’t need.',
+    howItWorksCard3Title: 'You get a decision, not a catalog',
+    howItWorksCard3Desc:
+      'A recommended model, useful alternates by quality, speed, or cost, and a plain-language why—so you’re not comparing vendors by hand.',
 
     whyKicker: 'Why',
-    whyTitle: 'Less guesswork. More predictable outputs.',
+    whyTitle: 'Pick models with context, not guesswork',
     whyBody:
-      'Stop cycling through models manually. Route each prompt to the best fit for your goal, so results feel consistent — even as providers, pricing, and latency shift.',
+      'Trying models one by one or jumping between vendor pages burns time and tokens. LLM Router recommends the best fit for your prompt and preferences, surfaces sensible alternates, and explains the trade-offs—so decisions stay consistent as pricing and latency shift.',
 
     featuresKicker: 'Features',
-    featuresTitle: 'Built for real workflows',
-    feature1Title: 'Priority-aware ranking',
-    feature1Desc: 'Pick what matters — quality, speed, or cost — and we’ll rank accordingly.',
-    feature2Title: 'Explainable decisions',
-    feature2Desc: 'See the “why” behind the top pick, not just a score.',
-    feature3Title: 'Use-case tuning',
-    feature3Desc: 'IDE, APIs, chatbots, batch: route to models that shine in your context.',
-    feature4Title: 'Provider control',
-    feature4Desc: 'Prefer specific vendors when possible — without losing flexibility.',
+    featuresTitle: 'What you control—and what you get',
+    feature1Title: 'Priority-first ranking',
+    feature1Desc:
+      'Prioritize quality, speed, or cost—we reorder candidates so the top pick matches what you said matters.',
+    feature2Title: 'Recommendation, alternates, and why',
+    feature2Desc:
+      'A primary suggestion plus backups you can compare, with short reasoning instead of a bare name or score.',
+    feature3Title: 'Use case and response depth',
+    feature3Desc:
+      'Point routing at how you’ll use the answer (IDE, API, chatbot, batch) and how deep replies should be.',
+    feature4Title: 'Preferred providers',
+    feature4Desc:
+      'Favor certain vendors when it’s reasonable, without pretending every prompt should force the same brand.',
   },
   es: {
     appName: 'LLM Router',
@@ -197,9 +225,11 @@ export const translations = {
     heroAnnouncementComingSoon: 'Próximamente',
     heroAnnouncementText:
       'Disponible para la terminal y como extensión de VS Code',
-    promptPlaceholder: 'Describe tu tarea... (ej. Resume este artículo en una frase)',
-    promptLabel: 'Describe tu tarea',
+    promptPlaceholder: 'Pega tu tarea o prompt… (ej. Resume este artículo en una frase)',
+    promptLabel: 'Tu prompt',
     advancedOptions: 'Opciones avanzadas',
+    advancedOptionsIntro:
+      'Opcionales: cambian cómo ordenamos los modelos para este prompt—prioridad, caso de uso, proveedores preferidos y profundidad de respuesta.',
     analyse: 'Analizar',
     priority: 'Prioridad',
     quality: 'Calidad',
@@ -208,8 +238,10 @@ export const translations = {
     useCase: 'Caso de uso',
     preferredProviders: 'Proveedores preferidos',
     responseDepth: 'Profundidad de respuesta',
-    responseDepthHint: 'Controla qué tan detallada y exhaustiva debe ser la respuesta',
-    responseDepthHelper: 'Controla qué tan detallada y exhaustiva debe ser la respuesta',
+    responseDepthHint:
+      'Orienta el ranking hacia modelos que encajan con el tipo de respuesta que buscas (breve vs exhaustiva).',
+    responseDepthHelper:
+      'Indica qué tan profunda o extensa quieres la salida para que el orden tenga sentido.',
     depthShort: 'Corta',
     depthBalanced: 'Equilibrada',
     depthDetailed: 'Detallada',
@@ -221,9 +253,12 @@ export const translations = {
     useCaseChatbotBlurb: 'Optimizado para conversación',
     useCaseBatch: 'Batch',
     useCaseBatchBlurb: 'Procesamiento a gran escala',
-    priorityHint: 'Lo más importante al clasificar modelos para tu prompt.',
-    useCaseHint: 'Ayuda a priorizar modelos que destacan en tu entorno.',
-    providersHint: 'Considerar solo modelos de estos proveedores cuando sea posible.',
+    priorityHint:
+      'Cambia cómo ponderamos calidad, velocidad y coste al ordenar candidatos para tu prompt.',
+    useCaseHint:
+      'Sesga el ranking hacia modelos que encajan en contextos reales: IDE, API, chatbot o batch.',
+    providersHint:
+      'Si hay varios modelos viables, favorecemos estos proveedores—sin ignorar un encaje claramente mejor.',
     // responseDepthHint is used in the Advanced Options modal tooltip.
     history: 'Historial',
     close: 'Cerrar',
@@ -329,6 +364,19 @@ export const translations = {
     tierAlternative: 'Alternativa',
     badgeJson: 'JSON',
     badgeTools: 'Herramientas',
+    typeLabel_chat: 'Chat',
+    typeLabel_code: 'Código',
+    typeLabel_analysis: 'Análisis',
+    typeLabel_json: 'JSON',
+    typeLabel_tools: 'Tools',
+    typeLabel_multimodal: 'Multimodal',
+    typeLabel_vision: 'Visión',
+    publicStatus_verified: 'Verificado',
+    publicStatus_provisional: 'Estimado',
+    publicStatus_available: 'Disponible',
+    publicStatus_deprecated: 'Obsoleto',
+    advancedComparisonsTitle: 'Comparativa técnica',
+    resultWhyHeading: 'Por qué esta recomendación',
     cap_general: 'General',
     cap_analysis: 'Análisis',
     cap_code: 'Código',
@@ -354,34 +402,36 @@ export const translations = {
     apply: 'Aplicar',
 
     howItWorksKicker: 'Cómo funciona',
-    howItWorksTitle: 'De tu prompt al mejor modelo — en segundos',
-    howItWorksCard1Title: 'Describe la tarea',
-    howItWorksCard1Desc: 'Pega un prompt, ticket o spec. Inferimos intención y restricciones.',
-    howItWorksCard2Title: 'Enruta con señales',
+    howItWorksTitle: 'Qué ocurre después de pegar tu prompt',
+    howItWorksCard1Title: 'Leemos la tarea',
+    howItWorksCard1Desc:
+      'Pegas lo que necesitas hacer. Analizamos la tarea y la acoplamos a modelos que encajan—no es un listado genérico.',
+    howItWorksCard2Title: 'Ajustas qué te importa',
     howItWorksCard2Desc:
-      'Ajusta por calidad, velocidad o coste — más tu caso de uso y proveedores.',
-    howItWorksCard3Title: 'Obtén una decisión clara',
+      'Prioridad, caso de uso, proveedores preferidos y profundidad de respuesta cambian cómo ordenamos opciones. Omite lo que no necesites.',
+    howItWorksCard3Title: 'Recibes una decisión, no un catálogo',
     howItWorksCard3Desc:
-      'Una recomendación principal con trade-offs que realmente puedes confiar.',
+      'Un modelo recomendado, alternativas útiles por calidad, velocidad o coste, y un porqué en lenguaje claro—sin comparar proveedores a mano.',
 
     whyKicker: 'Por qué',
-    whyTitle: 'Menos conjeturas. Resultados más predecibles.',
+    whyTitle: 'Elige modelo con contexto, no a ciegas',
     whyBody:
-      'Deja de probar modelos manualmente. Enruta cada prompt al mejor ajuste según tu objetivo, para que los resultados sean consistentes — incluso si cambian proveedores, precios o latencia.',
+      'Probar modelo tras modelo o saltar entre páginas de vendors quita tiempo y tokens. LLM Router recomienda el mejor encaje para tu prompt y preferencias, muestra alternativas razonables y explica los trade-offs—para que las decisiones sigan siendo coherentes aunque cambien precios o latencia.',
 
     featuresKicker: 'Funciones',
-    featuresTitle: 'Hecho para flujos reales',
-    feature1Title: 'Ranking por prioridad',
+    featuresTitle: 'Qué controlas y qué obtienes',
+    feature1Title: 'Ranking según prioridad',
     feature1Desc:
-      'Elige lo que importa — calidad, velocidad o coste — y clasificamos en consecuencia.',
-    feature2Title: 'Decisiones explicables',
-    feature2Desc: 'Entiende el “por qué” del top pick, no solo un score.',
-    feature3Title: 'Ajuste por caso de uso',
+      'Prioriza calidad, velocidad o coste—reordenamos candidatos para que lo de arriba refleje lo que dijiste que importa.',
+    feature2Title: 'Recomendación, alternativas y porqué',
+    feature2Desc:
+      'Una sugerencia principal, respaldos comparables y una explicación breve—no solo un nombre o un número.',
+    feature3Title: 'Caso de uso y profundidad',
     feature3Desc:
-      'IDE, APIs, chatbots, batch: enruta a modelos que destacan en tu contexto.',
-    feature4Title: 'Control de proveedores',
+      'Orienta el enrutado a cómo usarás la respuesta (IDE, API, chatbot, batch) y qué tan elaborada debe ser.',
+    feature4Title: 'Proveedores preferidos',
     feature4Desc:
-      'Prioriza vendors específicos cuando sea posible — sin perder flexibilidad.',
+      'Favorece ciertos vendors cuando tiene sentido, sin forzar la misma marca en cada prompt.',
   },
 } as const;
 

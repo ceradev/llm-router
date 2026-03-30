@@ -34,7 +34,7 @@ export default function LLMRouterApp() {
     () => new Set(["ide", "api"])
   )
   const [providers, setProviders] = useState<Set<string>>(
-    () => new Set(["OpenAI", "Anthropic"])
+    () => new Set(["openai", "anthropic"])
   )
   const [responseDepth, setResponseDepth] = useState<ResponseDepth>("balanced")
 
@@ -55,7 +55,13 @@ export default function LLMRouterApp() {
   }, [])
 
   const startResultsFetch = useCallback(
-    (nextPrompt: string, nextPriority: Priority) => {
+    (
+      nextPrompt: string,
+      nextPriority: Priority,
+      nextUseCases: Set<UseCaseId>,
+      nextProviders: Set<string>,
+      nextResponseDepth: ResponseDepth,
+    ) => {
       resultsAbortRef.current?.abort()
       const controller = new AbortController()
       resultsAbortRef.current = controller
@@ -63,7 +69,13 @@ export default function LLMRouterApp() {
       setResults(null)
 
       void fetchRecommendation(
-        { prompt: nextPrompt, priority: nextPriority },
+        {
+          prompt: nextPrompt,
+          priority: nextPriority,
+          useCases: Array.from(nextUseCases),
+          preferredProviders: Array.from(nextProviders),
+          responseDepth: nextResponseDepth,
+        },
         { signal: controller.signal }
       ).then(
         (payload) => {
@@ -82,9 +94,9 @@ export default function LLMRouterApp() {
   const handleAnalyse = useCallback(() => {
     if (!prompt.trim()) return
     setHistoryOpen(false)
-    startResultsFetch(prompt, priority)
+    startResultsFetch(prompt, priority, useCases, providers, responseDepth)
     setPhase("analyzing")
-  }, [prompt, priority, startResultsFetch])
+  }, [prompt, priority, providers, responseDepth, startResultsFetch, useCases])
 
   const handleAnalyzingComplete = useCallback(() => {
     setPhase("results")
@@ -103,16 +115,16 @@ export default function LLMRouterApp() {
 
   const handleHistoryRerun = useCallback((item: HistoryItem) => {
     setPrompt(item.prompt)
-    startResultsFetch(item.prompt, priority)
+    startResultsFetch(item.prompt, priority, useCases, providers, responseDepth)
     setHistoryOpen(false)
-  }, [priority, startResultsFetch])
+  }, [priority, providers, responseDepth, startResultsFetch, useCases])
 
   const handleHistoryView = useCallback((item: HistoryItem) => {
     setPrompt(item.prompt)
     setAdvancedOpen(true)
-    startResultsFetch(item.prompt, priority)
+    startResultsFetch(item.prompt, priority, useCases, providers, responseDepth)
     setHistoryOpen(false)
-  }, [priority, startResultsFetch])
+  }, [priority, providers, responseDepth, startResultsFetch, useCases])
 
   useEffect(() => {
     return () => {

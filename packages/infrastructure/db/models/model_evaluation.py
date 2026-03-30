@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 class ModelEvaluation(Base, table=True):
     __tablename__ = "model_evaluations"
 
+    # NOTE: This table represents per-request evaluation snapshots (tied to `llm_requests.id`),
+    # not catalog benchmark history. Use `model_benchmark_runs` (see `benchmark_kind`),
+    # plus `llm_models.evaluation_status` (`provisional` vs `verified`) for routing eligibility.
+
     id: UUID = Field(
         default_factory=uuid4,
         sa_column=Column(PG_UUID(as_uuid=True), primary_key=True),

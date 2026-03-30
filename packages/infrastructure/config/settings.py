@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     openrouter_enable_periodic_sync: bool = False
     openrouter_sync_interval_hours: float = 6.0
 
+    catalog_evaluation_after_openrouter_sync: bool = False
+    catalog_evaluation_max_models_per_run: int = 50
+    catalog_evaluation_max_live_per_run: int = 10
+    catalog_evaluation_provider_allowlist: str | None = None
+    catalog_evaluation_include_verified_live: bool = False
+    catalog_evaluation_live_delay_seconds: float = 2.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

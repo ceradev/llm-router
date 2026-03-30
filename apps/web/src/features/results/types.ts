@@ -41,12 +41,25 @@ export type ModelDecision = {
   sameAsBestOverall?: boolean
   /** Scoring / routing detail from backend ranking row */
   rankingExplanation?: string
+  modelCategories?: string[]
+  technicalCapabilities?: string[]
+  verificationScopes?: string[]
+  /** Legacy categories kept while backend migrates clients. */
   capabilities?: string[]
   supportsJson?: boolean
   supportsTools?: boolean
   /** From catalog tier (e.g. OpenRouter sync), not inferred from name */
   isFreeTier?: boolean
   tier?: string
+  evaluationStatus?: string
+  supportsVision?: boolean
+  inputModalities?: string[]
+  outputModalities?: string[]
+  /** Derived on the server (e.g. chat, vision, json) */
+  modelTypeLabels?: string[]
+  isVerified?: boolean
+  /** Maps to product status badge; omitted for rejected */
+  publicStatusKey?: string | null
 }
 
 export type CategoryPick = {
@@ -77,6 +90,9 @@ export type ResultsRoutingInfo = {
   responseLatencyMs: number | null
   attempts: RoutingAttempt[]
   candidateModels: string[]
+  preferredProviders: string[]
+  preferredProvidersApplied: boolean
+  preferredProvidersFallbackUsed: boolean
 }
 
 export type ResultsDecisionPayload = {
@@ -85,5 +101,7 @@ export type ResultsDecisionPayload = {
   categoryPicks: CategoryPick[]
   extraAlternatives: ModelDecision[]
   routing?: ResultsRoutingInfo
+  /** True when UI is rendering offline/mock fallback, not backend ranking. */
+  isMock?: boolean
 }
 

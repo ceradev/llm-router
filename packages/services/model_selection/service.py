@@ -43,7 +43,11 @@ class ModelSelector:
         require_json: bool | None = None,
     ) -> RoutingDecision:
         effective_json = task.require_json if require_json is None else require_json
-        db_rows = self._load_candidates(priority=task.priority, require_json=effective_json)
+        db_rows, pref_applied, pref_fallback_used, normalized_pref = self._load_candidates(
+            task=task,
+            priority=task.priority,
+            require_json=effective_json,
+        )
         candidates, scored_candidates, score_breakdowns = self._rank_candidates(
             task=task,
             rows=db_rows,
@@ -62,9 +66,7 @@ class ModelSelector:
             intent=intent,
             priority=task.priority,
             primary_model=candidates[0].model_id,
-            require_json=effective_json,
             ranked=candidates,
-            evaluation=evaluation,
             score_breakdowns=score_breakdowns,
         )
 
@@ -74,15 +76,36 @@ class ModelSelector:
             applied_temperature=temperature,
             candidates=candidates,
             scored_candidates=scored_candidates,
+            preferred_providers=normalized_pref,
+            preferred_providers_applied=pref_applied,
+            preferred_providers_fallback_used=pref_fallback_used,
         )
 
     def _load_candidates(
         self,
         *,
+        task: GatewayTask,
         priority: Priority,
         require_json: bool,
-    ) -> list[ModelRoutingRow]:
-        return self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
+    ) -> tuple[list[ModelRoutingRow], bool, bool, list[str]]:
+        raw = task.preferred_providers
+        normalized_pref = [str(p).strip().lower() for p in raw if str(p).strip()]
+
+        if not normalized_pref:
+            rows = self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
+            return (rows, False, False, [])
+
+        filtered = self.model_repository.list_routing_candidates(
+            priority=priority,
+            require_json=require_json,
+            provider_slugs=normalized_pref,
+        )
+        if filtered:
+            return (filtered, True, False, normalized_pref)
+
+        # Fallback behavior: if strict filter yields no candidates, use full catalog
+        rows = self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
+        return (rows, False, True, normalized_pref)
 
     def _rank_candidates(
         self,
@@ -147,9 +170,7 @@ class ModelSelector:
         intent: Intent,
         priority: Priority,
         primary_model: str,
-        require_json: bool,
         ranked: list[ModelProfile],
-        evaluation: PromptEvaluationResult,
         score_breakdowns: dict[str, ScoreBreakdown],
     ) -> str:
         short_name = primary_model.split("/")[-1].replace("-", " ").title()

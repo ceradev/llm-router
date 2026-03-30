@@ -18,6 +18,13 @@ from packages.schemas.gateway_response import (
     RankingHighlightResponse,
     RankingSummaryResponse,
 )
+from packages.schemas.ranking_public_fields import (
+    compute_model_categories,
+    compute_model_type_labels,
+    compute_technical_capabilities,
+    compute_verification_scopes,
+    public_status_fields,
+)
 
 
 def to_attempt_response(attempt: InvocationAttempt) -> InvocationAttemptResponse:
@@ -33,6 +40,8 @@ def to_attempt_response(attempt: InvocationAttempt) -> InvocationAttemptResponse
 def scored_candidate_to_ranked_response(candidate: ScoredCandidate) -> RankedModelResponse:
     caps = sorted({c.value for c in candidate.model.capabilities})
     tier = candidate.model.tier
+    ev = candidate.model.evaluation_status
+    verified_flag, public_status_key = public_status_fields(ev)
     return RankedModelResponse(
         model_id=candidate.model.model_id,
         rank=candidate.rank,
@@ -47,9 +56,19 @@ def scored_candidate_to_ranked_response(candidate: ScoredCandidate) -> RankedMod
         max_output_tokens=candidate.model.max_output_tokens,
         supports_json=candidate.model.supports_json,
         supports_tools=candidate.model.supports_tools,
+        model_categories=compute_model_categories(candidate.model),
+        technical_capabilities=compute_technical_capabilities(candidate.model),
+        verification_scopes=compute_verification_scopes(candidate.model),
         capabilities=caps,
         is_free=tier == "free",
         tier=tier,
+        evaluation_status=ev,
+        supports_vision=candidate.model.supports_vision,
+        input_modalities=list(candidate.model.input_modalities),
+        output_modalities=list(candidate.model.output_modalities),
+        model_type_labels=compute_model_type_labels(candidate.model),
+        is_verified=verified_flag,
+        public_status_key=public_status_key,
     )
 
 
@@ -114,6 +133,9 @@ def to_gateway_response(
         fallback_used=result.fallback_used,
         candidate_models=[model.model_id for model in result.decision.candidates],
         attempts=[to_attempt_response(attempt) for attempt in result.attempts],
+        preferred_providers=list(result.decision.preferred_providers),
+        preferred_providers_applied=result.decision.preferred_providers_applied,
+        preferred_providers_fallback_used=result.decision.preferred_providers_fallback_used,
     )
 
 
@@ -126,6 +148,9 @@ def to_model_summary_list(models: list[ModelProfile]) -> list[ModelSummaryRespon
             latency_score=model.latency_score,
             cost_score=model.cost_score,
             supports_json=model.supports_json,
+            model_categories=compute_model_categories(model),
+            technical_capabilities=compute_technical_capabilities(model),
+            verification_scopes=compute_verification_scopes(model),
             capabilities=sorted(model.capabilities, key=lambda item: item.value),
         )
         for model in models

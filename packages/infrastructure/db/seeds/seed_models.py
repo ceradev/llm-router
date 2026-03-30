@@ -1,3 +1,10 @@
+"""Curated model seeds.
+
+Rows inserted here are **not** execution-verified: they are assigned `provisional` catalog
+state with operator-curated scores. Competitive routing requires a successful **live**
+benchmark (`benchmark-live-v1`) so `evaluation_status` becomes `verified`.
+"""
+
 from __future__ import annotations
 
 import logging
