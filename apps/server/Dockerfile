@@ -22,4 +22,5 @@ ENV PYTHONPATH=/app:/app/apps/server
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 👇 CAMBIO CLAVE
+CMD ["sh", "apps/server/start.sh"]
