@@ -18,7 +18,7 @@ export function HowCard({ icon, titleKey, descriptionKey }: Readonly<Props>) {
     <motion.article
       whileHover={reduceMotion ? undefined : { y: -6, scale: 1.01 }}
       transition={{ type: "spring", stiffness: 420, damping: 28 }}
-      className="group relative overflow-hidden rounded-2xl border border-(--border-subtle) bg-(--surface-glass) p-5 backdrop-blur-xl sm:p-6"
+      className="group relative flex h-full min-h-56 flex-col overflow-hidden rounded-2xl border border-(--border-subtle) bg-(--surface-glass) p-5 backdrop-blur-xl sm:p-6"
     >
       <div
         aria-hidden
@@ -29,15 +29,15 @@ export function HowCard({ icon, titleKey, descriptionKey }: Readonly<Props>) {
         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(59,130,246,0.14),rgba(255,255,255,0)_45%,rgba(14,165,233,0.10))]" />
       </div>
 
-      <div className="relative z-10 flex items-start gap-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#3B82F6]/25 bg-white/8 text-(--text-primary) shadow-[0_0_24px_rgba(59,130,246,0.12)]">
+      <div className="relative z-10 flex h-full flex-col">
+        <span className="grid h-11 w-11 place-items-center rounded-xl border border-[#3B82F6]/25 bg-white/8 text-(--text-primary) shadow-[0_0_24px_rgba(59,130,246,0.12)]">
           <span className="h-5 w-5 text-[#93C5FD]">{icon}</span>
         </span>
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold tracking-tight text-(--text-primary) sm:text-lg">
+        <div className="mt-4">
+          <h3 className="text-lg font-semibold tracking-tight text-(--text-primary)">
             {t(titleKey)}
           </h3>
-          <p className="mt-1 text-sm leading-relaxed text-(--text-muted)">
+          <p className="mt-2 text-sm leading-7 text-(--text-muted) sm:text-[0.95rem]">
             {t(descriptionKey)}
           </p>
         </div>

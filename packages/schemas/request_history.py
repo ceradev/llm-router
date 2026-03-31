@@ -70,7 +70,7 @@ class ExecutionDetail(BaseModel):
 
 class FeedbackDetail(BaseModel):
     id: UUID
-    request_id: UUID
+    request_id: UUID | None
     model_id: int
     rating: int
     comment: str | None
@@ -96,3 +96,9 @@ class RequestDetailResponse(BaseModel):
 class FeedbackRequest(BaseModel):
     rating: int = Field(ge=1, le=5)
     comment: str | None = None
+
+
+class ModelFeedbackRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = None
+    request_id: UUID | None = None

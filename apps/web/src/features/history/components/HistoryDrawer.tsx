@@ -65,7 +65,7 @@ export function HistoryDrawer({ open, onClose, onRerun, onView }: Readonly<Props
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-3 py-2 text-sm text-(--text-muted) transition-colors hover:bg-(--surface-glass-hover) hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
+                className="min-h-11 rounded-lg px-3 py-2 text-sm text-(--text-muted) transition-colors hover:bg-(--surface-glass-hover) hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
               >
                 {t("close")}
               </button>
@@ -102,17 +102,17 @@ export function HistoryDrawer({ open, onClose, onRerun, onView }: Readonly<Props
                         </span>
                         <span>{item.timeAgo}</span>
                       </div>
-                      <div className="mt-3 flex gap-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                      <div className="mt-3 flex gap-2 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <button
                           type="button"
-                          className="rounded-lg bg-(--surface-glass-hover) px-3 py-1.5 text-xs font-medium text-(--text-primary) transition-colors hover:bg-[#3B82F6]/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
+                          className="min-h-11 rounded-lg bg-(--surface-glass-hover) px-3.5 py-2 text-sm font-medium text-(--text-primary) transition-colors hover:bg-[#3B82F6]/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
                           onClick={() => onRerun?.(item)}
                         >
                           {t("rerun")}
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg bg-(--surface-glass-hover) px-3 py-1.5 text-xs font-medium text-(--text-primary) transition-colors hover:bg-[#0EA5E9]/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
+                          className="min-h-11 rounded-lg bg-(--surface-glass-hover) px-3.5 py-2 text-sm font-medium text-(--text-primary) transition-colors hover:bg-[#0EA5E9]/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/70"
                           onClick={() => onView?.(item)}
                         >
                           {t("view")}

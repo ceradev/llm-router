@@ -9,7 +9,11 @@ from sqlmodel import Session, create_engine, select
 from packages.infrastructure.config.settings import Settings
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
 from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
-from packages.infrastructure.db.models.model_benchmark_run import BenchmarkKind, ModelBenchmarkRun
+from packages.infrastructure.db.models.model_benchmark_run import (
+    BenchmarkKind,
+    BenchmarkRunStatus,
+    ModelBenchmarkRun,
+)
 from packages.infrastructure.db.models.provider import Provider
 from packages.infrastructure.providers.openrouter_client import ChatCompletionResult
 from packages.services.benchmark.catalog_evaluation_orchestrator import (
@@ -145,7 +149,7 @@ def test_heuristic_phase_respects_max_models_per_run() -> None:
         assert len(heur_runs) == 2
 
 
-def test_heuristic_skips_out_of_scope_without_benchmark_row() -> None:
+def test_heuristic_includes_vision_model_in_text_scope() -> None:
     engine = _engine()
     with Session(engine) as session:
         p = Provider(slug="openai", display_name="OpenAI", is_active=True)
@@ -166,12 +170,39 @@ def test_heuristic_skips_out_of_scope_without_benchmark_row() -> None:
         )
         session.commit()
 
-        assert summary.heuristic_attempted == 0
-        assert summary.heuristic_skipped_out_of_scope == 1
+        assert summary.heuristic_attempted == 1
+        assert summary.heuristic_skipped_out_of_scope == 0
         n = session.exec(
             select(ModelBenchmarkRun).where(ModelBenchmarkRun.model_id == vision.id)
         ).all()
-        assert len(n) == 0
+        assert len(n) == 1
+        assert n[0].status == BenchmarkRunStatus.COMPLETED.value
+
+
+def test_heuristic_phase_includes_rejected_models() -> None:
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+        m = _add_cataloged_text_model(
+            session, provider=p, slug_suffix="rej", routing_key="openrouter/openai/rej"
+        )
+        m.evaluation_status = ModelEvaluationStatus.REJECTED
+        session.add(m)
+        session.commit()
+
+        orch = CatalogEvaluationOrchestrator(session)
+        summary = orch.run(
+            CatalogEvaluationConfig(max_models_per_run=10, max_live_benchmarks_per_run=0, provider_allowlist=None)
+        )
+        session.commit()
+
+        assert summary.heuristic_attempted == 1
+        runs = session.exec(
+            select(ModelBenchmarkRun).where(ModelBenchmarkRun.model_id == m.id)
+        ).all()
+        assert len(runs) == 1
 
 
 def test_live_phase_respects_max_live_and_uses_mock_client() -> None:
@@ -337,6 +368,49 @@ def test_catalog_evaluation_config_from_settings_parses_allowlist() -> None:
     s = Settings(catalog_evaluation_provider_allowlist=" OpenAI , anthropic ")
     cfg = catalog_evaluation_config_from_settings(s)
     assert cfg.provider_allowlist == frozenset({"openai", "anthropic"})
+
+
+def test_catalog_evaluation_config_includes_file_text_flags() -> None:
+    s = Settings(
+        catalog_evaluation_enable_file_text_v3=True,
+        catalog_evaluation_strict_file_text_checks=False,
+    )
+    cfg = catalog_evaluation_config_from_settings(s)
+    assert cfg.enable_file_text_v3 is True
+    assert cfg.strict_file_text_checks is False
+
+
+def test_heuristic_file_text_v3_runs_when_enabled() -> None:
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+        _add_cataloged_text_model(
+            session,
+            provider=p,
+            slug_suffix="file-v3",
+            routing_key="openrouter/openai/file-v3",
+            supports_vision=False,
+            input_modalities=["text", "file"],
+            output_modalities=["text"],
+        )
+        session.commit()
+
+        orch = CatalogEvaluationOrchestrator(session)
+        summary = orch.run(
+            CatalogEvaluationConfig(
+                max_models_per_run=10,
+                max_live_benchmarks_per_run=0,
+                provider_allowlist=None,
+                enable_file_text_v3=True,
+            )
+        )
+        session.commit()
+
+        assert summary.heuristic_attempted == 1
+        run = session.exec(select(ModelBenchmarkRun).where(ModelBenchmarkRun.benchmark_kind == BenchmarkKind.HEURISTIC.value)).one()
+        assert run.benchmark_scope == "file_to_text"
 
 
 def test_sync_invokes_catalog_eval_when_enabled_and_survives_orchestrator_error() -> None:

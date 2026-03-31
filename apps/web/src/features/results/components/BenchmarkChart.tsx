@@ -45,8 +45,10 @@ function formatTokens(tokens?: number) {
 
 export function BenchmarkChart({
   models,
+  showHeader = true,
 }: Readonly<{
   models: ModelDecision[]
+  showHeader?: boolean
 }>) {
   const { t } = useI18n()
 
@@ -59,22 +61,24 @@ export function BenchmarkChart({
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-2xl border border-(--border-subtle) bg-(--surface-glass) p-5 shadow-(--shadow-elevated) backdrop-blur-xl sm:p-6"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-(--text-muted)">
-            {t("benchmark")}
-          </p>
-          <h3 className="mt-2 text-lg font-semibold text-(--text-primary) sm:text-xl">
-            {t("benchmarkTitle")}
-          </h3>
-          <p className="mt-1 text-sm text-(--text-muted)">
-            {t("benchmarkSubtitle")}
-          </p>
+      {showHeader ? (
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-(--text-muted)">
+              {t("benchmark")}
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-(--text-primary) sm:text-xl">
+              {t("benchmarkTitle")}
+            </h3>
+            <p className="mt-1 text-sm text-(--text-muted)">
+              {t("benchmarkSubtitle")}
+            </p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      <div className="mt-5 overflow-x-auto">
-        <table className="min-w-[720px] w-full border-separate border-spacing-0">
+      <div className={showHeader ? "mt-5 overflow-x-auto" : "overflow-x-auto"}>
+        <table className="w-full min-w-[640px] border-separate border-spacing-0 sm:min-w-[720px]">
           <thead>
             <tr>
               <th

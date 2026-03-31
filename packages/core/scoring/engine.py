@@ -9,6 +9,9 @@ from packages.domain.models import Capability, ModelProfile
 @dataclass(frozen=True)
 class ScoreBreakdown:
     total: float
+    base_total: float
+    adjusted_total: float
+    model_score_adjustment: float
     quality_component: float
     latency_component: float
     cost_component: float
@@ -69,6 +72,8 @@ def compute_model_score(
     requires_tools: bool = False,
     use_cases: list[str] | None = None,
     preferred_providers: list[str] | None = None,
+    avg_rating: float | None = None,
+    ratings_count: int = 0,
 ) -> ScoreBreakdown:
     quality_weight, latency_weight, cost_weight = _weights_for_priority(priority)
 
@@ -116,19 +121,29 @@ def compute_model_score(
     )
     routing_bonus = capability_bonus + use_case_bonus + provider_bonus + confidence_bonus
 
-    total = base_total + routing_bonus
+    total_without_feedback = base_total + routing_bonus
+    adjustment_factor = 1.0
+    if avg_rating is not None and ratings_count >= 5:
+        adjustment_factor = avg_rating / 3.0
+    adjusted_total = total_without_feedback * adjustment_factor
+    model_score_adjustment = adjusted_total - total_without_feedback
 
     explanation = (
-        f"score={total:.2f} "
+        f"score={adjusted_total:.2f} "
         f"(quality={quality_component:.2f}, latency={latency_component:.2f}, "
         f"cost={cost_component:.2f}, priority={priority_component:.2f}, "
         f"routing_bonus={routing_bonus:.2f} "
-        f"[capability={capability_bonus:.2f}, use_case={use_case_bonus:.2f}, provider={provider_bonus:.2f}, confidence={confidence_bonus:.2f}]; "
+        f"[capability={capability_bonus:.2f}, use_case={use_case_bonus:.2f}, provider={provider_bonus:.2f}, confidence={confidence_bonus:.2f}], "
+        f"feedback_adjustment={model_score_adjustment:.2f}, feedback_factor={adjustment_factor:.2f}, "
+        f"feedback_avg_rating={avg_rating if avg_rating is not None else 'n/a'}, feedback_count={ratings_count}; "
         f"priority='{priority.value}')"
     )
 
     return ScoreBreakdown(
-        total=total,
+        total=adjusted_total,
+        base_total=total_without_feedback,
+        adjusted_total=adjusted_total,
+        model_score_adjustment=model_score_adjustment,
         quality_component=quality_component,
         latency_component=latency_component,
         cost_component=cost_component,

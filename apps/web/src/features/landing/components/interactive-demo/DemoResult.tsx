@@ -29,7 +29,7 @@ export function DemoResult({
         <p className="text-xs font-semibold uppercase tracking-wider text-(--text-accent)">
           RESULT
         </p>
-        <span className="rounded-full border border-[#3B82F6]/20 bg-[#3B82F6]/10 px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
+        <span className="rounded-full border border-(--border-subtle) bg-(--surface-glass) px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
           Best match
         </span>
       </div>
@@ -43,7 +43,7 @@ export function DemoResult({
           className="pointer-events-none absolute inset-0 opacity-70"
           style={{
             background:
-              "radial-gradient(circle at 20% 10%, rgba(59,130,246,0.26), transparent 55%), radial-gradient(circle at 90% 60%, rgba(14,165,233,0.20), transparent 56%), linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
+              "radial-gradient(circle at 20% 10%, rgba(59,130,246,0.16), transparent 55%), radial-gradient(circle at 90% 60%, rgba(14,165,233,0.12), transparent 56%), linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0))",
           }}
         />
 
@@ -63,7 +63,7 @@ export function DemoResult({
               <p className="text-xs font-semibold text-(--text-primary)">{scoreClamped}%</p>
             </div>
 
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/5">
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/8">
               <motion.div
                 className="h-full rounded-full bg-linear-to-r from-[#3B82F6] to-[#0EA5E9]"
                 initial={{ width: 0 }}

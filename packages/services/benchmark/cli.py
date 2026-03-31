@@ -36,9 +36,45 @@ def main(argv: list[str] | None = None) -> int:
 
     p_he = sub.add_parser("heuristic", help="Metadata screening only (max: provisional).")
     p_he.add_argument("--model-id", type=int, required=True, help="`llm_models.id`.")
+    p_he.add_argument(
+        "--enable-image-text-v2",
+        action="store_true",
+        default=base_cfg.enable_image_text_v2,
+        help="Enable image->text multimodal scope in heuristic.",
+    )
+    p_he.add_argument(
+        "--enable-file-text-v3",
+        action="store_true",
+        default=base_cfg.enable_file_text_v3,
+        help="Enable file->text multimodal scope in heuristic.",
+    )
 
     p_lv = sub.add_parser("live", help="OpenRouter execution benchmark (path to verified).")
     p_lv.add_argument("--model-id", type=int, required=True, help="`llm_models.id`.")
+    p_lv.add_argument(
+        "--enable-image-text-v2",
+        action="store_true",
+        default=base_cfg.enable_image_text_v2,
+        help="Enable image->text multimodal scope in live benchmark.",
+    )
+    p_lv.add_argument(
+        "--strict-image-text-checks",
+        action="store_true",
+        default=base_cfg.strict_image_text_checks,
+        help="Use strict assertions for image->text live checks.",
+    )
+    p_lv.add_argument(
+        "--enable-file-text-v3",
+        action="store_true",
+        default=base_cfg.enable_file_text_v3,
+        help="Enable file->text multimodal scope in live benchmark.",
+    )
+    p_lv.add_argument(
+        "--strict-file-text-checks",
+        action="store_true",
+        default=base_cfg.strict_file_text_checks,
+        help="Use strict assertions for file->text live checks.",
+    )
 
     p_cat = sub.add_parser("catalog-run", help="Batch heuristic (cataloged) then live (provisional).")
     p_cat.add_argument(
@@ -75,6 +111,30 @@ def main(argv: list[str] | None = None) -> int:
         metavar="SECONDS",
         help="Delay between live benchmarks to avoid rate limits (default: settings).",
     )
+    p_cat.add_argument(
+        "--enable-image-text-v2",
+        action="store_true",
+        default=base_cfg.enable_image_text_v2,
+        help="Enable image->text multimodal scope in catalog-run.",
+    )
+    p_cat.add_argument(
+        "--strict-image-text-checks",
+        action="store_true",
+        default=base_cfg.strict_image_text_checks,
+        help="Use strict assertions for image->text live checks in catalog-run.",
+    )
+    p_cat.add_argument(
+        "--enable-file-text-v3",
+        action="store_true",
+        default=base_cfg.enable_file_text_v3,
+        help="Enable file->text multimodal scope in catalog-run.",
+    )
+    p_cat.add_argument(
+        "--strict-file-text-checks",
+        action="store_true",
+        default=base_cfg.strict_file_text_checks,
+        help="Use strict assertions for file->text live checks in catalog-run.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -82,7 +142,11 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if args.command == "heuristic":
                 svc = ModelBenchmarkService(session)
-                out = svc.run_heuristic_screening(model_id=args.model_id)
+                out = svc.run_heuristic_screening(
+                    model_id=args.model_id,
+                    enable_image_text_v2=args.enable_image_text_v2,
+                    enable_file_text_v3=args.enable_file_text_v3,
+                )
                 session.commit()
                 print(
                     f"benchmark_run_id={out.benchmark_run_id} status={out.status.value} "
@@ -92,7 +156,13 @@ def main(argv: list[str] | None = None) -> int:
 
             if args.command == "live":
                 svc = LiveModelBenchmarkService(session)
-                out = svc.run_live_benchmark_for_model(model_id=args.model_id)
+                out = svc.run_live_benchmark_for_model(
+                    model_id=args.model_id,
+                    enable_image_text_v2=args.enable_image_text_v2,
+                    strict_image_text_checks=args.strict_image_text_checks,
+                    enable_file_text_v3=args.enable_file_text_v3,
+                    strict_file_text_checks=args.strict_file_text_checks,
+                )
                 session.commit()
                 print(
                     f"benchmark_run_id={out.benchmark_run_id} status={out.status.value} "
@@ -110,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
                 provider_allowlist=allow,
                 include_verified_live=args.include_verified_live,
                 live_delay_seconds=max(0.0, args.delay),
+                enable_image_text_v2=args.enable_image_text_v2,
+                strict_image_text_checks=args.strict_image_text_checks,
+                enable_file_text_v3=args.enable_file_text_v3,
+                strict_file_text_checks=args.strict_file_text_checks,
             )
             summary = CatalogEvaluationOrchestrator(session).run(cfg)
             session.commit()

@@ -29,7 +29,7 @@ export function DemoInput({ prompt, stretch = false, onAnalyse }: Readonly<Props
         <p className="text-xs font-semibold uppercase tracking-wider text-(--text-accent)">
           INPUT
         </p>
-        <span className="rounded-full border border-[#3B82F6]/20 bg-[#3B82F6]/10 px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
+        <span className="rounded-full border border-(--border-subtle) bg-(--surface-glass) px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
           Demo
         </span>
       </div>

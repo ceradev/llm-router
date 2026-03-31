@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -23,6 +24,7 @@ from packages.services.orchestration.orchestrator import GatewayOrchestrator
 from sqlmodel import Session
 
 router = APIRouter(prefix="/v1", tags=["gateway"])
+logger = logging.getLogger(__name__)
 
 
 def _execute_gateway_completion(
@@ -35,11 +37,13 @@ def _execute_gateway_completion(
     try:
         result = orchestrator.execute(task, session_id=session_id)
     except NoModelsAvailableError as exc:
+        logger.exception("No eligible models available for gateway request")
         raise HTTPException(
             status_code=503,
             detail={"message": str(exc) or "Model catalog not initialized"},
         ) from exc
     except RoutingExhaustedError as exc:
+        logger.exception("Routing exhausted for gateway request")
         raise HTTPException(
             status_code=502,
             detail={

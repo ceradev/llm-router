@@ -12,33 +12,40 @@ const STORAGE_KEY = "llm-router-bg-motion"
 
 type Ctx = {
   enabled: boolean
+  hasExplicitPreference: boolean
   toggle: () => void
   setEnabled: (v: boolean) => void
 }
 
 const BackgroundMotionContext = createContext<Ctx | null>(null)
 
-function readStored(): boolean {
-  if (globalThis.window === undefined) return true
+function readStored(): { enabled: boolean; hasExplicitPreference: boolean } {
+  if (globalThis.window === undefined) {
+    return { enabled: true, hasExplicitPreference: false }
+  }
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    if (v === "0") return false
-    if (v === "1") return true
+    if (v === "0") return { enabled: false, hasExplicitPreference: true }
+    if (v === "1") return { enabled: true, hasExplicitPreference: true }
   } catch {
     // ignore
   }
-  return true
+  return { enabled: true, hasExplicitPreference: false }
 }
 
 export function BackgroundMotionProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [enabled, setEnabledState] = useState(true)
+  const [hasExplicitPreference, setHasExplicitPreference] = useState(false)
 
   useEffect(() => {
-    setEnabledState(readStored())
+    const stored = readStored()
+    setEnabledState(stored.enabled)
+    setHasExplicitPreference(stored.hasExplicitPreference)
   }, [])
 
   const setEnabled = useCallback((v: boolean) => {
     setEnabledState(v)
+    setHasExplicitPreference(true)
     if (globalThis.window === undefined) return
     try {
       localStorage.setItem(STORAGE_KEY, v ? "1" : "0")
@@ -47,9 +54,12 @@ export function BackgroundMotionProvider({ children }: Readonly<{ children: Reac
     }
   }, [])
 
-  const toggle = useCallback(() => setEnabled((v) => !v), [setEnabled])
+  const toggle = useCallback(() => setEnabled(!enabled), [enabled, setEnabled])
 
-  const value = useMemo<Ctx>(() => ({ enabled, toggle, setEnabled }), [enabled, toggle, setEnabled])
+  const value = useMemo<Ctx>(
+    () => ({ enabled, hasExplicitPreference, toggle, setEnabled }),
+    [enabled, hasExplicitPreference, toggle, setEnabled]
+  )
 
   return <BackgroundMotionContext.Provider value={value}>{children}</BackgroundMotionContext.Provider>
 }

@@ -1,9 +1,15 @@
 param(
+    [ValidateSet("docker", "local")]
+    [string]$ExecutionMode = "docker",
     [string]$ServiceName = "backend",
     [int]$MaxModels = -1,
     [int]$MaxLive = -1,
     [string]$ProviderAllowlist = "",
-    [switch]$IncludeVerifiedLive
+    [switch]$IncludeVerifiedLive,
+    [switch]$EnableImageTextV2,
+    [switch]$StrictImageTextChecks,
+    [switch]$EnableFileTextV3,
+    [switch]$StrictFileTextChecks
 )
 
 $argsList = @("python", "-m", "packages.services.benchmark.cli", "catalog-run")
@@ -23,5 +29,22 @@ if ($ProviderAllowlist.Trim() -ne "") {
 if ($IncludeVerifiedLive) {
     $argsList += "--include-verified-live"
 }
+if ($EnableImageTextV2) {
+    $argsList += "--enable-image-text-v2"
+}
+if ($StrictImageTextChecks) {
+    $argsList += "--strict-image-text-checks"
+}
+if ($EnableFileTextV3) {
+    $argsList += "--enable-file-text-v3"
+}
+if ($StrictFileTextChecks) {
+    $argsList += "--strict-file-text-checks"
+}
 
-docker compose exec $ServiceName @argsList
+if ($ExecutionMode -eq "local") {
+    & $argsList[0] $argsList[1..($argsList.Length - 1)]
+}
+else {
+    docker compose exec $ServiceName @argsList
+}

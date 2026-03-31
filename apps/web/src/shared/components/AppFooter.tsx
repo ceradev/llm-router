@@ -10,7 +10,7 @@ export function AppFooter({ className }: Readonly<AppFooterProps>) {
   return (
     <footer
       className={clsx(
-        "mt-auto border-t border-(--border-subtle) pt-4 text-[11px] text-(--text-muted) sm:pt-5 sm:text-xs",
+        "mt-auto border-t border-(--border-subtle) pt-4 text-xs text-(--text-muted) sm:pt-5",
         className
       )}
     >
@@ -23,7 +23,7 @@ export function AppFooter({ className }: Readonly<AppFooterProps>) {
           href="https://ceradev.com"
           target="_blank"
           rel="noreferrer"
-          className="text-center transition-colors hover:text-(--text-accent) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle) rounded-sm sm:col-span-1 sm:justify-self-center"
+          className="inline-flex min-h-11 items-center justify-center rounded-md px-3 text-center transition-colors hover:text-(--text-accent) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle) sm:col-span-1 sm:justify-self-center"
         >
           Made by Ceradev
         </a>
@@ -33,13 +33,13 @@ export function AppFooter({ className }: Readonly<AppFooterProps>) {
             href="https://github.com/ceradev/llm-router"
             target="_blank"
             rel="noreferrer"
-            className="transition-colors hover:text-(--text-accent) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle) rounded-sm"
+            className="inline-flex min-h-11 items-center rounded-md px-3 transition-colors hover:text-(--text-accent) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
           >
             GitHub
           </a>
           <a
             href="mailto:suarezorizondocesararamis@gmail.com"
-            className="transition-colors hover:text-(--text-accent) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle) rounded-sm"
+            className="inline-flex min-h-11 items-center rounded-md px-3 transition-colors hover:text-(--text-accent) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
           >
             Feedback
           </a>

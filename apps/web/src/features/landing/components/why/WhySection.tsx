@@ -25,26 +25,18 @@ export function WhySection() {
             </p>
           </div>
 
-          <div className="relative min-h-56 overflow-hidden rounded-2xl border border-[#3B82F6]/20 bg-[linear-gradient(135deg,rgba(59,130,246,0.20),rgba(0,0,0,0)_55%,rgba(14,165,233,0.16))] shadow-[0_0_60px_rgba(59,130,246,0.10)] sm:min-h-64">
+          <div className="relative min-h-56 overflow-hidden rounded-2xl border border-(--border-subtle) bg-[linear-gradient(145deg,rgba(59,130,246,0.12),rgba(14,165,233,0.08)_52%,rgba(2,6,23,0.06))] shadow-[0_0_48px_rgba(59,130,246,0.08)] sm:min-h-64">
             <div
               aria-hidden
-              className="absolute -left-10 -top-10 h-52 w-52 rounded-full bg-[#3B82F6]/26 blur-3xl"
+              className="absolute -left-10 -top-10 h-52 w-52 rounded-full bg-[#3B82F6]/16 blur-3xl"
             />
             <div
               aria-hidden
-              className="absolute -bottom-14 -right-14 h-60 w-60 rounded-full bg-[#0EA5E9]/22 blur-3xl"
+              className="absolute -bottom-14 -right-14 h-60 w-60 rounded-full bg-[#0EA5E9]/14 blur-3xl"
             />
             <div
               aria-hidden
-              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.10),rgba(255,255,255,0)_55%)]"
-            />
-            <div
-              aria-hidden
-              className="absolute inset-x-7 top-8 h-px bg-linear-to-r from-transparent via-white/20 to-transparent"
-            />
-            <div
-              aria-hidden
-              className="absolute inset-x-10 bottom-10 h-px bg-linear-to-r from-transparent via-white/14 to-transparent"
+              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.06),rgba(255,255,255,0)_55%)]"
             />
 
             <div className="absolute inset-0 z-10 flex items-center justify-center p-2 sm:p-3">

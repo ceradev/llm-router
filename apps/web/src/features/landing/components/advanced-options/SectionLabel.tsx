@@ -9,13 +9,13 @@ export function SectionLabel({
 }>) {
     return (
         <div className="mb-2.5 flex items-center gap-1.5">
-            <span className="text-xs font-medium tracking-wide text-(--text-muted)">
+            <span className="text-xs font-medium tracking-wide text-slate-800 dark:text-(--text-muted)">
                 {children}
             </span>
             <span className="group relative inline-flex">
                 <button
                     type="button"
-                    className="rounded p-0.5 text-(--text-muted) opacity-60 transition-colors hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
+                    className="rounded p-0.5 text-slate-700 opacity-70 transition-colors hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus) dark:text-(--text-muted)"
                     aria-label={hint}
                 >
                     <IconInfo className="h-3.5 w-3.5" />

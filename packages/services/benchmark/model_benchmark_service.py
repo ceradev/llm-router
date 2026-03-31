@@ -4,7 +4,8 @@
 
 Active evaluation scope (v1)
 ----------------------------
-Only **text → text** models are screened. Multimodal models are `skipped_unsupported`.
+Text-output models are screened for text heuristics, including vision-capable models
+when their outputs remain text.
 
 Promotion policy (heuristic)
 ----------------------------
@@ -36,26 +37,39 @@ from packages.infrastructure.db.models.model_benchmark_run import (
 CURRENT_HEURISTIC_VERSION = "benchmark-heuristic-v1"
 
 _NON_TEXT_MODALITIES = frozenset({"image", "audio", "video", "file"})
+_NON_V2_MODALITIES = frozenset({"audio", "video", "file"})
+_NON_V3_MODALITIES = frozenset({"audio", "video", "image"})
 
 
 def is_active_text_to_text_evaluation_scope(model: LLMModel) -> bool:
-    """Return True if the model is in scope for v1 text-only benchmark logic."""
+    """Return True when the model can be evaluated in text mode."""
 
-    if model.supports_vision:
-        return False
+    ins = {str(x).lower() for x in (model.input_modalities or ["text"])}
+    outs = {str(x).lower() for x in (model.output_modalities or ["text"])}
+    return "text" in ins and "text" in outs
 
-    def _modalities(xs: list[str] | None) -> set[str]:
-        if not xs:
-            return {"text"}
-        return {str(x).lower() for x in xs}
 
-    ins = _modalities(model.input_modalities)
-    outs = _modalities(model.output_modalities)
-    if ins & _NON_TEXT_MODALITIES:
-        return False
-    if outs & _NON_TEXT_MODALITIES:
-        return False
-    return True
+def resolve_heuristic_scope(
+    model: LLMModel,
+    *,
+    enable_image_text_v2: bool,
+    enable_file_text_v3: bool,
+) -> BenchmarkScope | None:
+    """Return benchmark scope for heuristic screening or None when unsupported."""
+    ins = {str(x).lower() for x in (model.input_modalities or ["text"])}
+    outs = {str(x).lower() for x in (model.output_modalities or ["text"])}
+    if "text" not in outs:
+        return None
+
+    if enable_image_text_v2 and "image" in ins:
+        return BenchmarkScope.IMAGE_TO_TEXT
+    if enable_file_text_v3 and "file" in ins:
+        return BenchmarkScope.FILE_TO_TEXT
+    # Fallback to text heuristics whenever the model supports text input/output.
+    # Multimodal capabilities do not disqualify text evaluation.
+    if "text" not in ins:
+        return None
+    return BenchmarkScope.TEXT
 
 
 @dataclass(frozen=True)
@@ -134,7 +148,13 @@ class ModelBenchmarkService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def run_heuristic_screening(self, *, model_id: int) -> BenchmarkOutcome:
+    def run_heuristic_screening(
+        self,
+        *,
+        model_id: int,
+        enable_image_text_v2: bool = False,
+        enable_file_text_v3: bool = False,
+    ) -> BenchmarkOutcome:
         """Metadata-only screening. Does not call providers. Max outcome: `provisional`."""
 
         model = self._session.get(LLMModel, model_id)
@@ -145,6 +165,7 @@ class ModelBenchmarkService:
             row = self._persist_run(
                 model_id=model_id,
                 benchmark_kind=BenchmarkKind.HEURISTIC,
+                benchmark_scope=BenchmarkScope.TEXT,
                 status=BenchmarkRunStatus.SKIPPED_UNSUPPORTED,
                 scores=None,
                 summary="Heuristic screening skipped: deprecated models are not evaluated.",
@@ -166,6 +187,7 @@ class ModelBenchmarkService:
             row = self._persist_run(
                 model_id=model_id,
                 benchmark_kind=BenchmarkKind.HEURISTIC,
+                benchmark_scope=BenchmarkScope.TEXT,
                 status=BenchmarkRunStatus.SKIPPED_UNSUPPORTED,
                 scores=None,
                 summary="Heuristic screening skipped: model is already execution-verified; use live benchmark to refresh.",
@@ -183,10 +205,16 @@ class ModelBenchmarkService:
                 evaluation_status_after=model.evaluation_status,
             )
 
-        if not is_active_text_to_text_evaluation_scope(model):
+        scope = resolve_heuristic_scope(
+            model,
+            enable_image_text_v2=enable_image_text_v2,
+            enable_file_text_v3=enable_file_text_v3,
+        )
+        if scope is None:
             row = self._persist_run(
                 model_id=model_id,
                 benchmark_kind=BenchmarkKind.HEURISTIC,
+                benchmark_scope=BenchmarkScope.TEXT,
                 status=BenchmarkRunStatus.SKIPPED_UNSUPPORTED,
                 scores=None,
                 summary="Heuristic screening skipped: multimodal or out-of-scope for text→text v1.",
@@ -213,8 +241,8 @@ class ModelBenchmarkService:
         raw: dict[str, Any] = {
             "evaluation_version": CURRENT_HEURISTIC_VERSION,
             "benchmark_kind": BenchmarkKind.HEURISTIC.value,
-            "evaluation_scope": "text_to_text_v1",
-            "benchmark_scope": BenchmarkScope.TEXT.value,
+            "evaluation_scope": "image_text_v2" if scope == BenchmarkScope.IMAGE_TO_TEXT else "text_to_text_v1",
+            "benchmark_scope": scope.value,
             "deterministic": True,
             "scores": {
                 "quality_score": scores.quality_score,
@@ -237,6 +265,7 @@ class ModelBenchmarkService:
         row = self._persist_run(
             model_id=model_id,
             benchmark_kind=BenchmarkKind.HEURISTIC,
+            benchmark_scope=scope,
             status=bench_status,
             scores=scores,
             summary=summary,
@@ -269,6 +298,7 @@ class ModelBenchmarkService:
         *,
         model_id: int,
         benchmark_kind: BenchmarkKind,
+        benchmark_scope: BenchmarkScope,
         status: BenchmarkRunStatus,
         scores: ComputedBenchmarkScores | None,
         summary: str,
@@ -280,7 +310,7 @@ class ModelBenchmarkService:
                 model_id=model_id,
                 evaluation_version=CURRENT_HEURISTIC_VERSION,
                 benchmark_kind=kind_val,
-                benchmark_scope=BenchmarkScope.TEXT.value,
+                benchmark_scope=benchmark_scope.value,
                 status=status.value,
                 quality_score=0,
                 latency_score=0,
@@ -297,7 +327,7 @@ class ModelBenchmarkService:
                 model_id=model_id,
                 evaluation_version=CURRENT_HEURISTIC_VERSION,
                 benchmark_kind=kind_val,
-                benchmark_scope=BenchmarkScope.TEXT.value,
+                benchmark_scope=benchmark_scope.value,
                 status=status.value,
                 quality_score=scores.quality_score,
                 latency_score=scores.latency_score,

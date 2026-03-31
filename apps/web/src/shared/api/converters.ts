@@ -179,6 +179,51 @@ function featuredModelIds(summary: GatewayBackendResponse["ranking_summary"]): S
   return ids
 }
 
+type CategoryMetricKind = CategoryPick["kind"]
+
+function scoreForKind(
+  row: GatewayBackendResponse["ranking"][0],
+  kind: CategoryMetricKind,
+): number {
+  switch (kind) {
+    case "quality":
+      return row.quality_score
+    case "cost":
+      return row.cost_score
+    case "speed":
+      return row.latency_score
+    default: {
+      const exhaustive: never = kind
+      return exhaustive
+    }
+  }
+}
+
+function pickDistinctCategoryRow(
+  ranking: GatewayBackendResponse["ranking"],
+  kind: CategoryMetricKind,
+  excludedModelIds: Set<string>,
+): GatewayBackendResponse["ranking"][0] | null {
+  let best: GatewayBackendResponse["ranking"][0] | null = null
+  for (const row of ranking) {
+    if (excludedModelIds.has(row.model_id)) continue
+    if (best === null) {
+      best = row
+      continue
+    }
+    const rowScore = scoreForKind(row, kind)
+    const bestScore = scoreForKind(best, kind)
+    if (rowScore > bestScore) {
+      best = row
+      continue
+    }
+    if (rowScore === bestScore && row.rank < best.rank) {
+      best = row
+    }
+  }
+  return best
+}
+
 function buildRoutingInfo(data: GatewayBackendResponse): ResultsRoutingInfo {
   return {
     requestId: data.request_id,
@@ -236,12 +281,31 @@ export function gatewayResponseToResultsPayload(
     { kind: "speed", highlight: summary.best_speed },
   ]
 
-  const categoryPicks: CategoryPick[] = categorySpecs.map(({ kind, highlight }) => ({
-    kind,
-    model: decisionFromHighlight(data, highlight, `cat-${kind}`, [], false),
-    reasonKey: highlight.reason_key,
-    sameAsBest: highlight.same_as_best_overall,
-  }))
+  const excludedForCategories = new Set<string>([summary.best_overall.model_id])
+  const categoryPicks: CategoryPick[] = categorySpecs.map(({ kind, highlight }) => {
+    const distinct = pickDistinctCategoryRow(sorted, kind, excludedForCategories)
+    if (distinct) {
+      excludedForCategories.add(distinct.model_id)
+      return {
+        kind,
+        model: toModelDecision(distinct, `cat-${kind}`, {
+          why: [],
+          isTop: false,
+          rankingReasonKey: highlight.reason_key,
+          sameAsBestOverall: false,
+          measuredLatencyMs: distinct.model_id === data.model_id ? data.response_latency_ms : undefined,
+        }),
+        reasonKey: highlight.reason_key,
+        sameAsBest: false,
+      }
+    }
+    return {
+      kind,
+      model: decisionFromHighlight(data, highlight, `cat-${kind}`, [], false),
+      reasonKey: highlight.reason_key,
+      sameAsBest: highlight.same_as_best_overall,
+    }
+  })
 
   const featured = featuredModelIds(summary)
   const extraAlternatives = sorted

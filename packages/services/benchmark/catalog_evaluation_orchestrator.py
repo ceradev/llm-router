@@ -11,11 +11,11 @@ from sqlmodel import Session, select
 
 from packages.infrastructure.config.settings import Settings
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
+from packages.infrastructure.db.models.model_benchmark_run import BenchmarkRunStatus
 from packages.infrastructure.db.models.provider import Provider
 from packages.services.benchmark.live_model_benchmark_service import LiveModelBenchmarkService
 from packages.services.benchmark.model_benchmark_service import (
     ModelBenchmarkService,
-    is_active_text_to_text_evaluation_scope,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,10 @@ class CatalogEvaluationConfig:
     provider_allowlist: frozenset[str] | None = None
     include_verified_live: bool = False
     live_delay_seconds: float = 2.0
+    enable_image_text_v2: bool = False
+    strict_image_text_checks: bool = True
+    enable_file_text_v3: bool = False
+    strict_file_text_checks: bool = True
 
 
 @dataclass
@@ -69,6 +73,10 @@ def catalog_evaluation_config_from_settings(settings: Settings) -> CatalogEvalua
         provider_allowlist=allow,
         include_verified_live=settings.catalog_evaluation_include_verified_live,
         live_delay_seconds=max(0.0, settings.catalog_evaluation_live_delay_seconds),
+        enable_image_text_v2=settings.catalog_evaluation_enable_image_text_v2,
+        strict_image_text_checks=settings.catalog_evaluation_strict_image_text_checks,
+        enable_file_text_v3=settings.catalog_evaluation_enable_file_text_v3,
+        strict_file_text_checks=settings.catalog_evaluation_strict_file_text_checks,
     )
 
 
@@ -100,15 +108,7 @@ class CatalogEvaluationOrchestrator:
         if config.max_models_per_run <= 0:
             return
 
-        stmt = (
-            select(LLMModel, Provider)
-            .join(Provider, Provider.id == LLMModel.provider_id)
-            .where(LLMModel.evaluation_status == ModelEvaluationStatus.CATALOGED)
-            .where(LLMModel.is_active.is_(True))
-            .where(Provider.is_active.is_(True))
-            .order_by(LLMModel.id)
-        )
-        rows = self._session.exec(stmt).all()
+        rows = self._session.exec(self._heuristic_rows_stmt()).all()
         done = 0
 
         for model, provider in rows:
@@ -116,20 +116,19 @@ class CatalogEvaluationOrchestrator:
                 break
             if not self._provider_ok(provider.slug, config):
                 continue
-            if not is_active_text_to_text_evaluation_scope(model):
-                summary.heuristic_skipped_out_of_scope += 1
-                logger.info(
-                    "catalog_eval phase=heuristic model_id=%s routing_key=%s skipped=out_of_scope_v1",
-                    model.id,
-                    model.routing_key,
-                )
-                continue
 
             assert model.id is not None
             try:
-                out = self._heuristic.run_heuristic_screening(model_id=model.id)
+                out = self._heuristic.run_heuristic_screening(
+                    model_id=model.id,
+                    enable_image_text_v2=config.enable_image_text_v2,
+                    enable_file_text_v3=config.enable_file_text_v3,
+                )
                 done += 1
-                summary.heuristic_attempted += 1
+                if out.status == BenchmarkRunStatus.SKIPPED_UNSUPPORTED:
+                    summary.heuristic_skipped_out_of_scope += 1
+                else:
+                    summary.heuristic_attempted += 1
                 logger.info(
                     "catalog_eval phase=heuristic model_id=%s routing_key=%s passed=%s status=%s "
                     "evaluation_status_after=%s",
@@ -149,23 +148,7 @@ class CatalogEvaluationOrchestrator:
         if config.max_live_benchmarks_per_run <= 0:
             return
 
-        if config.include_verified_live:
-            status_filter = or_(
-                LLMModel.evaluation_status == ModelEvaluationStatus.PROVISIONAL,
-                LLMModel.evaluation_status == ModelEvaluationStatus.VERIFIED,
-            )
-        else:
-            status_filter = LLMModel.evaluation_status == ModelEvaluationStatus.PROVISIONAL
-
-        stmt = (
-            select(LLMModel, Provider)
-            .join(Provider, Provider.id == LLMModel.provider_id)
-            .where(status_filter)
-            .where(LLMModel.is_active.is_(True))
-            .where(Provider.is_active.is_(True))
-            .order_by(LLMModel.id)
-        )
-        rows = self._session.exec(stmt).all()
+        rows = self._session.exec(self._live_rows_stmt(config)).all()
         done = 0
 
         for model, provider in rows:
@@ -173,20 +156,21 @@ class CatalogEvaluationOrchestrator:
                 break
             if not self._provider_ok(provider.slug, config):
                 continue
-            if not is_active_text_to_text_evaluation_scope(model):
-                summary.live_skipped_out_of_scope += 1
-                logger.info(
-                    "catalog_eval phase=live model_id=%s routing_key=%s skipped=out_of_scope_v1",
-                    model.id,
-                    model.routing_key,
-                )
-                continue
 
             assert model.id is not None
             try:
-                out = self._live.run_live_benchmark_for_model(model_id=model.id)
+                out = self._live.run_live_benchmark_for_model(
+                    model_id=model.id,
+                    enable_image_text_v2=config.enable_image_text_v2,
+                    strict_image_text_checks=config.strict_image_text_checks,
+                    enable_file_text_v3=config.enable_file_text_v3,
+                    strict_file_text_checks=config.strict_file_text_checks,
+                )
                 done += 1
-                summary.live_attempted += 1
+                if out.status == BenchmarkRunStatus.SKIPPED_UNSUPPORTED:
+                    summary.live_skipped_out_of_scope += 1
+                else:
+                    summary.live_attempted += 1
                 logger.info(
                     "catalog_eval phase=live model_id=%s routing_key=%s passed=%s status=%s "
                     "evaluation_status_after=%s",
@@ -204,3 +188,36 @@ class CatalogEvaluationOrchestrator:
 
             if done < config.max_live_benchmarks_per_run and config.live_delay_seconds > 0:
                 time.sleep(config.live_delay_seconds)
+
+    def _heuristic_rows_stmt(self):
+        return (
+            select(LLMModel, Provider)
+            .join(Provider, Provider.id == LLMModel.provider_id)
+            .where(
+                LLMModel.evaluation_status.in_(
+                    (ModelEvaluationStatus.CATALOGED, ModelEvaluationStatus.REJECTED)
+                )
+            )
+            .where(LLMModel.is_active.is_(True))
+            .where(Provider.is_active.is_(True))
+            .order_by(LLMModel.id)
+        )
+
+    def _live_rows_stmt(self, config: CatalogEvaluationConfig):
+        status_filter = self._live_status_filter(config)
+        return (
+            select(LLMModel, Provider)
+            .join(Provider, Provider.id == LLMModel.provider_id)
+            .where(status_filter)
+            .where(LLMModel.is_active.is_(True))
+            .where(Provider.is_active.is_(True))
+            .order_by(LLMModel.id)
+        )
+
+    def _live_status_filter(self, config: CatalogEvaluationConfig):
+        if config.include_verified_live:
+            return or_(
+                LLMModel.evaluation_status == ModelEvaluationStatus.PROVISIONAL,
+                LLMModel.evaluation_status == ModelEvaluationStatus.VERIFIED,
+            )
+        return LLMModel.evaluation_status == ModelEvaluationStatus.PROVISIONAL

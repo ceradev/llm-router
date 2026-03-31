@@ -6,7 +6,6 @@ import { formatLatency, formatTokensCount } from "../utils"
 import { ModelCapabilityBadges } from "./ModelCapabilityBadges"
 
 type TFn = (k: TranslationKey) => string
-type FeedbackState = "idle" | "submitting" | "success" | "error"
 
 function costRelLabel(
   t: (k: TranslationKey) => string,
@@ -34,40 +33,30 @@ function formatTopCostPrices(model: ModelDecision): string | null {
   return null
 }
 
-function formatUserRating(value: number | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
-  return value.toFixed(1)
-}
-
 function formatScoreOutOfTen(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
   const clamped = Math.max(1, Math.min(10, value))
   return clamped.toFixed(1)
 }
 
+function formatUserRating(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
+  return value.toFixed(1)
+}
+
 export function TopModelCard({
   top,
   routing,
   isMock,
-  canSendFeedback,
-  feedbackRating,
-  feedbackState,
-  onRate,
   t,
   variants,
 }: Readonly<{
   top: ModelDecision
   routing: ResultsDecisionPayload["routing"]
   isMock: boolean
-  canSendFeedback: boolean
-  feedbackRating: number | null
-  feedbackState: FeedbackState
-  onRate: (rating: number) => void
   t: TFn
   variants: object
 }>) {
-  const feedbackDisabledHintVisible = canSendFeedback === false
-
   return (
     <motion.div
       variants={variants}
@@ -78,53 +67,31 @@ export function TopModelCard({
         aria-hidden
       />
       <div className="relative">
-        <div className="absolute right-0 top-0 min-w-28 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-100/80">Score</p>
-          <p className="text-lg font-semibold tabular-nums text-sky-100">{formatScoreOutOfTen(top.score)}</p>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-100/75">Rating</p>
-          <p className="text-sm font-medium tabular-nums text-violet-100">★ {formatUserRating(top.userRating)}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <span className="inline-flex items-center rounded-full bg-(--badge-bg) px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-(--text-accent-secondary)">
+              {t("bestModel")}
+            </span>
+            <h2 className="mt-3 truncate text-xl font-semibold text-(--text-primary) sm:text-2xl">{top.name}</h2>
+            <p className="mt-1 truncate text-base text-(--text-accent)">{top.provider}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="flex items-baseline justify-end gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-100/80">Score</p>
+                <p className="text-lg font-semibold tabular-nums text-sky-100">{formatScoreOutOfTen(top.score)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-100/75">Rating</p>
+                <p className="text-sm font-medium tabular-nums text-violet-100">★ {formatUserRating(top.userRating)}</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <span className="inline-flex items-center rounded-full bg-(--badge-bg) px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-(--text-accent-secondary)">
-          {t("bestModel")}
-        </span>
-        <h2 className="mt-3 text-xl font-semibold text-(--text-primary) sm:text-2xl">{top.name}</h2>
-        <p className="mt-1 text-base text-(--text-accent)">{top.provider}</p>
 
         <WhyThisModelSection top={top} routing={routing} isMock={isMock} t={t} />
 
         <ModelCapabilityBadges model={top} className="mt-5" />
-
-        <div className="mt-4 rounded-lg border border-(--border-subtle) bg-(--surface-glass) px-3 py-3 text-left">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-(--text-muted)">User rating</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                disabled={!canSendFeedback || feedbackState === "submitting"}
-                onClick={() => onRate(value)}
-                className={
-                  feedbackRating === value
-                    ? "rounded-md border border-sky-300/60 bg-sky-500/20 px-2.5 py-1 text-xs font-semibold text-sky-100 disabled:opacity-50"
-                    : "rounded-md border border-(--border-subtle) bg-(--surface-glass) px-2.5 py-1 text-xs font-medium text-(--text-primary) disabled:opacity-50"
-                }
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-          {feedbackDisabledHintVisible ? (
-            <p className="mt-2 text-[11px] text-(--text-muted)">
-              Feedback available for backend-ranked results only.
-            </p>
-          ) : null}
-          {feedbackState === "success" ? (
-            <p className="mt-2 text-[11px] text-emerald-300">Thanks for your feedback.</p>
-          ) : null}
-          {feedbackState === "error" ? (
-            <p className="mt-2 text-[11px] text-rose-300">Unable to save feedback right now.</p>
-          ) : null}
-        </div>
 
         <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-(--border-subtle) pt-5 text-center sm:grid-cols-3 sm:gap-4">
           <div>

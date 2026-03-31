@@ -1,7 +1,7 @@
 const SESSION_KEY = "llm-router-session-id"
 
 export function getSessionId(): string {
-  if (typeof globalThis.window === "undefined") {
+  if (globalThis.window === undefined) {
     return ""
   }
   let id = globalThis.window.localStorage.getItem(SESSION_KEY)

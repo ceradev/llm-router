@@ -21,13 +21,39 @@ function formatScoreOutOfTen(value: number | undefined): string {
   return clamped.toFixed(1)
 }
 
+function formatUserRating(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
+  return value.toFixed(1)
+}
+
+function formatCostPerMillion(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
+  return value.toFixed(value >= 1 ? 2 : 4)
+}
+
+function formatPrice(model: ModelDecision): string {
+  if (
+    typeof model.costPerMillionInput === "number" &&
+    Number.isFinite(model.costPerMillionInput) &&
+    typeof model.costPerMillionOutput === "number" &&
+    Number.isFinite(model.costPerMillionOutput)
+  ) {
+    return `$${formatCostPerMillion(model.costPerMillionInput)}/M · $${formatCostPerMillion(model.costPerMillionOutput)}/M`
+  }
+  return model.cost?.rel ?? "N/A"
+}
+
 export function RunnerRow({
   model,
   index,
 }: Readonly<{ model: ModelDecision; index: number }>) {
   const { t } = useI18n()
-  const pros = model.pros.map((p) => translateCatalogProCon(p, t))
-  const cons = model.cons.map((c) => translateCatalogProCon(c, t))
+  const pros = model.pros.length > 0
+    ? model.pros.map((p) => translateCatalogProCon(p, t))
+    : [t("modelProsFallback")]
+  const cons = model.cons.length > 0
+    ? model.cons.map((c) => translateCatalogProCon(c, t))
+    : [t("modelConsFallback")]
 
   return (
     <motion.li
@@ -36,22 +62,26 @@ export function RunnerRow({
       transition={{ delay: 0.12 + index * 0.06, duration: 0.3 }}
       className="rounded-xl border border-(--border-subtle) bg-(--surface-glass) px-4 py-3 backdrop-blur-sm transition-colors hover:border-(--surface-glass-hover) hover:bg-(--surface-glass-hover)"
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-(--text-primary)">{model.name}</p>
           <p className="text-[12px] text-(--text-muted)">{model.provider}</p>
           <ModelCapabilityBadges model={model} className="mt-2" />
-          <p className="mt-2 text-[11px] text-(--text-muted)">
-            <span className="text-(--text-muted)">{t("labelContext")}: </span>
-            <span className="font-medium tabular-nums text-(--text-primary)">
-              {formatTokensCount(model.contextWindowTokens)}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-(--text-muted)">
+            <span className="inline-flex items-center gap-1">
+              <span className="text-(--text-muted)">{t("labelContext")}:</span>
+              <span className="font-medium tabular-nums text-(--text-primary)">
+                {formatTokensCount(model.contextWindowTokens)}
+              </span>
             </span>
-            <span className="mx-2 text-(--border-subtle)">·</span>
-            <span className="text-(--text-muted)">{t("labelOutputTokens")}: </span>
-            <span className="font-medium tabular-nums text-(--text-primary)">
-              {formatTokensCount(model.maxOutputTokens ?? undefined)}
+            <span className="hidden text-(--border-subtle) sm:inline">·</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="text-(--text-muted)">{t("labelOutputTokens")}:</span>
+              <span className="font-medium tabular-nums text-(--text-primary)">
+                {formatTokensCount(model.maxOutputTokens ?? undefined)}
+              </span>
             </span>
-          </p>
+          </div>
 
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <div className="min-w-0">
@@ -83,17 +113,18 @@ export function RunnerRow({
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
+        <div className="shrink-0 text-left sm:text-right">
           <p className="text-base font-semibold tabular-nums text-(--text-primary)">
             {formatScoreOutOfTen(model.score)}
           </p>
+          <p className="text-[11px] text-(--text-muted)">★ {formatUserRating(model.userRating)}</p>
           <p className="text-[11px] text-(--text-muted)">
             {typeof model.latencyMs === "number"
               ? formatLatency(model.latencyMs)
               : t("unknownLatency")}
           </p>
           <p className="mt-0.5 text-[11px] text-(--text-muted)">
-            {model.cost?.rel ? costRelLabel(t, model.cost.rel) : t("unknownCost")}
+            {model.cost?.rel ? costRelLabel(t, model.cost.rel) : t("unknownCost")} · {formatPrice(model)}
           </p>
         </div>
       </div>

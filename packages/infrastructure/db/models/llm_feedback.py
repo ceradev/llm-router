@@ -23,11 +23,12 @@ class LLMFeedback(Base, table=True):
         default_factory=uuid4,
         sa_column=Column(PG_UUID(as_uuid=True), primary_key=True),
     )
-    request_id: UUID = Field(
+    request_id: UUID | None = Field(
+        default=None,
         sa_column=Column(
             PG_UUID(as_uuid=True),
             ForeignKey("llm_requests.id", ondelete="CASCADE"),
-            nullable=False,
+            nullable=True,
             index=True,
         ),
     )

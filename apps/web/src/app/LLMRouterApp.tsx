@@ -1,183 +1,97 @@
 import { AnimatePresence } from "framer-motion"
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useState } from "react"
 
+import { PhaseView, type Phase } from "@/app/components/PhaseView"
+import {
+  useRecommendationFlow,
+  useRoutingOptionsState,
+} from "@/app/hooks"
 import { BackgroundMotionProvider } from "@/contexts/BackgroundMotionContext"
 import { I18nProvider } from "@/contexts/I18nContext"
 import { ThemeProvider } from "@/contexts/ThemeContext"
-
-import type {
-  Priority,
-  ResponseDepth,
-  UseCaseId,
-} from "@/features/landing/types/routingOptions"
-
-import { AnalyzingView } from "@/features/analyzing"
+import { FaqDrawer, FloatingButtons } from "@/features/faq/components"
 import { HistoryDrawer } from "@/features/history/components"
 import type { HistoryItem } from "@/features/history/types"
-import { LandingView } from "@/features/landing"
-import { ResultsView, type ResultsDecisionPayload } from "@/features/results"
 import { AppBackgrounds } from "@/shared/components"
-import { fetchRecommendation } from "@/shared/api/recommend"
-
-type Phase = "hero" | "analyzing" | "results"
 
 export default function LLMRouterApp() {
   const [phase, setPhase] = useState<Phase>("hero")
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [faqOpen, setFaqOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [isAtTop, setIsAtTop] = useState(true)
   const [prompt, setPrompt] = useState("")
-  const [results, setResults] = useState<ResultsDecisionPayload | null>(null)
-  const resultsAbortRef = useRef<AbortController | null>(null)
-
-  const [priority, setPriority] = useState<Priority>("quality")
-  const [useCases, setUseCases] = useState<Set<UseCaseId>>(
-    () => new Set(["ide", "api"])
-  )
-  const [providers, setProviders] = useState<Set<string>>(
-    () => new Set(["openai", "anthropic"])
-  )
-  const [responseDepth, setResponseDepth] = useState<ResponseDepth>("balanced")
-
-  const toggleUseCase = useCallback((id: UseCaseId) => {
-    setUseCases((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }, [])
-
-  const toggleProvider = useCallback((p: string) => {
-    setProviders((prev) => {
-      const next = new Set(prev)
-      next.has(p) ? next.delete(p) : next.add(p)
-      return next
-    })
-  }, [])
-
-  const startResultsFetch = useCallback(
-    (
-      nextPrompt: string,
-      nextPriority: Priority,
-      nextUseCases: Set<UseCaseId>,
-      nextProviders: Set<string>,
-      nextResponseDepth: ResponseDepth,
-    ) => {
-      resultsAbortRef.current?.abort()
-      const controller = new AbortController()
-      resultsAbortRef.current = controller
-
-      setResults(null)
-
-      void fetchRecommendation(
-        {
-          prompt: nextPrompt,
-          priority: nextPriority,
-          useCases: Array.from(nextUseCases),
-          preferredProviders: Array.from(nextProviders),
-          responseDepth: nextResponseDepth,
-        },
-        { signal: controller.signal }
-      ).then(
-        (payload) => {
-          if (controller.signal.aborted) return
-          setResults(payload)
-        },
-        () => {
-          if (controller.signal.aborted) return
-          setResults(null)
-        }
-      )
-    },
-    []
-  )
-
-  const handleAnalyse = useCallback(() => {
-    if (!prompt.trim()) return
-    setHistoryOpen(false)
-    startResultsFetch(prompt, priority, useCases, providers, responseDepth)
-    setPhase("analyzing")
-  }, [prompt, priority, providers, responseDepth, startResultsFetch, useCases])
-
-  const handleAnalyzingComplete = useCallback(() => {
-    setPhase("results")
-  }, [])
-
-  const handleNewAnalysis = useCallback(() => {
-    resultsAbortRef.current?.abort()
-    setPhase("hero")
-  }, [])
-
-  const handleStartOver = useCallback(() => {
-    resultsAbortRef.current?.abort()
-    setPrompt("")
-    setPhase("hero")
-  }, [])
+  const { results, startResultsFetch, restoreResultsFromHistory, abortInFlight } = useRecommendationFlow()
+  const {
+    priority,
+    setPriority,
+    useCases,
+    toggleUseCase,
+    providers,
+    toggleProvider,
+    responseDepth,
+    setResponseDepth,
+  } = useRoutingOptionsState()
 
   const handleHistoryRerun = useCallback((item: HistoryItem) => {
     setPrompt(item.prompt)
-    startResultsFetch(item.prompt, priority, useCases, providers, responseDepth)
+    setPhase("hero")
+    setAdvancedOpen(false)
     setHistoryOpen(false)
-  }, [priority, providers, responseDepth, startResultsFetch, useCases])
+  }, [])
 
   const handleHistoryView = useCallback((item: HistoryItem) => {
     setPrompt(item.prompt)
-    setAdvancedOpen(true)
-    startResultsFetch(item.prompt, priority, useCases, providers, responseDepth)
-    setHistoryOpen(false)
-  }, [priority, providers, responseDepth, startResultsFetch, useCases])
-
-  useEffect(() => {
-    return () => {
-      resultsAbortRef.current?.abort()
+    const restored = restoreResultsFromHistory(item.id)
+    if (restored) {
+      setPhase("results")
+      setAdvancedOpen(false)
+      setHistoryOpen(false)
+      return
     }
+
+    startResultsFetch({
+      prompt: item.prompt,
+      priority,
+      useCases,
+      providers,
+      responseDepth,
+    })
+    setPhase("analyzing")
+    setHistoryOpen(false)
+  }, [priority, providers, responseDepth, restoreResultsFromHistory, startResultsFetch, useCases])
+
+  const handleHistoryOpen = useCallback(() => {
+    setHistoryOpen(true)
   }, [])
 
-  let phaseView: ReactNode
+  const handleFaqOpen = useCallback(() => {
+    setFaqOpen(true)
+  }, [])
 
-  if (phase === "hero") {
-    phaseView = (
-      <LandingView
-        key="hero"
-        prompt={prompt}
-        setPrompt={setPrompt}
-        advancedOpen={advancedOpen}
-        setAdvancedOpen={setAdvancedOpen}
-        onAnalyse={handleAnalyse}
-        onHistoryOpen={() => setHistoryOpen(true)}
-        historyOpen={historyOpen}
-        priority={priority}
-        setPriority={setPriority}
-        useCases={useCases}
-        toggleUseCase={toggleUseCase}
-        providers={providers}
-        toggleProvider={toggleProvider}
-        responseDepth={responseDepth}
-        setResponseDepth={setResponseDepth}
-      />
-    )
-  } else if (phase === "analyzing") {
-    phaseView = (
-      <AnalyzingView
-        key="analyzing"
-        onComplete={handleAnalyzingComplete}
-        onHistoryOpen={() => setHistoryOpen(true)}
-        historyOpen={historyOpen}
-      />
-    )
-  } else {
-    phaseView = (
-      <ResultsView
-        key="results"
-        prompt={prompt}
-        priority={priority}
-        results={results ?? undefined}
-        onNewAnalysis={handleNewAnalysis}
-        onStartOver={handleStartOver}
-        onHistoryOpen={() => setHistoryOpen(true)}
-        historyOpen={historyOpen}
-      />
-    )
-  }
+  const handleScrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }, [])
+
+  useEffect(() => {
+    const shouldLockScroll = historyOpen || advancedOpen || faqOpen
+    if (!shouldLockScroll) return
+
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [advancedOpen, historyOpen, faqOpen])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsAtTop(window.scrollY < 100)
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
 
   return (
     <ThemeProvider>
@@ -186,13 +100,71 @@ export default function LLMRouterApp() {
           <div className="relative min-h-dvh font-sans antialiased overflow-hidden">
             <AppBackgrounds phase={phase} />
 
-            <AnimatePresence mode="wait">{phaseView}</AnimatePresence>
+            <AnimatePresence mode="wait">
+              <PhaseView
+                phase={phase}
+                historyOpen={historyOpen}
+                onHistoryOpen={handleHistoryOpen}
+                hero={{
+                  prompt,
+                  setPrompt,
+                  advancedOpen,
+                  setAdvancedOpen,
+                  onAnalyse: () => {
+                    if (!prompt.trim()) return
+                    setHistoryOpen(false)
+                    startResultsFetch({
+                      prompt,
+                      priority,
+                      useCases,
+                      providers,
+                      responseDepth,
+                    })
+                    setPhase("analyzing")
+                  },
+                  priority,
+                  setPriority,
+                  useCases,
+                  toggleUseCase,
+                  providers,
+                  toggleProvider,
+                  responseDepth,
+                  setResponseDepth,
+                }}
+                analyzing={{
+                  onAnalyzingComplete: () => setPhase("results"),
+                }}
+                results={{
+                  prompt,
+                  priority,
+                  onNewAnalysis: () => {
+                    abortInFlight()
+                    setPhase("hero")
+                  },
+                  onStartOver: () => {
+                    abortInFlight()
+                    setPrompt("")
+                    setPhase("hero")
+                  },
+                  results,
+                }}
+              />
+            </AnimatePresence>
 
             <HistoryDrawer
               open={historyOpen}
               onClose={() => setHistoryOpen(false)}
               onRerun={handleHistoryRerun}
               onView={handleHistoryView}
+            />
+
+            <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} />
+
+            <FloatingButtons
+              onFaqClick={handleFaqOpen}
+              onScrollToTop={handleScrollToTop}
+              isAtTop={isAtTop}
+              hideFaq={phase === "analyzing"}
             />
           </div>
         </BackgroundMotionProvider>

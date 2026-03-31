@@ -8,9 +8,9 @@ import { DemoLoading } from "./DemoLoading"
 import { DemoResult } from "./DemoResult"
 
 const TIMINGS_MS = {
-  input: 2200,
-  loading: 4200,
-  result: 6500,
+  input: 1100,
+  loading: 1900,
+  result: 3200,
 } as const
 
 type InteractiveDemoCardProps = {

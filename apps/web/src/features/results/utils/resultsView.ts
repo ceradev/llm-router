@@ -181,7 +181,7 @@ export function buildProvidersBanner(
   routing: ResultsRoutingInfo | undefined,
 ): ProvidersBanner | null {
   if (!routing) return null
-  if (!routing.preferredProvidersApplied && !routing.preferredProvidersFallbackUsed) return null
+  if (!routing.preferredProvidersFallbackUsed) return null
 
   const names = routing.preferredProviders.length ? routing.preferredProviders.join(", ") : ""
 
@@ -193,12 +193,6 @@ export function buildProvidersBanner(
         ? `No eligible models found for: ${names}. Showing all providers instead.`
         : "No eligible models found for preferred providers. Showing all providers instead.",
     }
-  }
-
-  return {
-    tone: "info",
-    title: "Filtering by preferred providers.",
-    body: names ? `Showing only: ${names}.` : "Showing only preferred providers.",
   }
 }
 

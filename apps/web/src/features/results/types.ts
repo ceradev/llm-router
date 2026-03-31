@@ -41,6 +41,7 @@ export type ModelDecision = {
   sameAsBestOverall?: boolean
   /** Scoring / routing detail from backend ranking row */
   rankingExplanation?: string
+  modelScoreAdjustment?: number
   modelCategories?: string[]
   technicalCapabilities?: string[]
   verificationScopes?: string[]
@@ -60,6 +61,10 @@ export type ModelDecision = {
   isVerified?: boolean
   /** Maps to product status badge; omitted for rejected */
   publicStatusKey?: string | null
+  userRating?: number
+  userRatingCount?: number
+  costPerMillionInput?: number
+  costPerMillionOutput?: number
 }
 
 export type CategoryPick = {
@@ -79,6 +84,7 @@ export type RoutingAttempt = {
 
 /** Extra transparency from the gateway response (omitted for offline mock data). */
 export type ResultsRoutingInfo = {
+  requestId: string
   intent: string
   priority: string
   explanation: string

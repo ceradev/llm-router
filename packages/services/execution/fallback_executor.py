@@ -32,8 +32,16 @@ class RoutingExhaustedError(RuntimeError):
 
 
 class FallbackExecutor:
-    def __init__(self, providers: dict[str, ProviderAdapter]) -> None:
+    def __init__(
+        self,
+        providers: dict[str, ProviderAdapter],
+        *,
+        max_total_attempts: int = 8,
+        max_failures_per_model: int = 1,
+    ) -> None:
         self.providers = providers
+        self.max_total_attempts = max(1, int(max_total_attempts))
+        self.max_failures_per_model = max(1, int(max_failures_per_model))
 
     def run(
         self,
@@ -43,8 +51,14 @@ class FallbackExecutor:
         on_attempt: Callable[[InvocationAttempt], None] | None = None,
     ) -> FallbackExecutionOutcome:
         attempts: list[InvocationAttempt] = []
+        failures_by_model: dict[str, int] = {}
 
         for model in decision.candidates:
+            if len(attempts) >= self.max_total_attempts:
+                break
+            if failures_by_model.get(model.model_id, 0) >= self.max_failures_per_model:
+                continue
+
             provider = self.providers.get(model.provider) or self.providers["openrouter"]
             t0 = time.perf_counter()
             try:
@@ -65,6 +79,7 @@ class FallbackExecutor:
                 return FallbackExecutionOutcome(response=merged, attempts=attempts)
             except ProviderError as exc:
                 elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                failures_by_model[model.model_id] = failures_by_model.get(model.model_id, 0) + 1
                 attempt = InvocationAttempt(
                     provider=model.provider,
                     model_id=model.model_id,

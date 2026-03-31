@@ -118,9 +118,10 @@ class ModelSelector:
     ) -> tuple[list[ModelProfile], tuple[ScoredCandidate, ...], dict[str, ScoreBreakdown]]:
         scored: list[tuple[float, ModelProfile, ModelRoutingRow, ScoreBreakdown]] = []
         model_ids = [row.db_model_id for row in rows]
-        feedback_stats = FeedbackRepository(self.model_repository.session).get_feedback_stats_by_model_ids(
-            model_ids=model_ids
-        )
+        feedback_stats: dict[int, tuple[float | None, int]] = {}
+        session = getattr(self.model_repository, "session", None)
+        if session is not None:
+            feedback_stats = FeedbackRepository(session).get_feedback_stats_by_model_ids(model_ids=model_ids)
         for row in rows:
             avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
             breakdown = compute_model_score(

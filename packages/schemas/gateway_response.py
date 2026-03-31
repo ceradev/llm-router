@@ -23,6 +23,7 @@ class RankedModelResponse(BaseModel):
     latency_score: float
     cost_score: float
     final_score: float
+    model_score_adjustment: float = 0.0
     explanation: str
     pros: list[str] | None = None
     cons: list[str] | None = None
@@ -44,6 +45,10 @@ class RankedModelResponse(BaseModel):
     model_type_labels: list[str] = Field(default_factory=list)
     is_verified: bool = False
     public_status_key: str | None = None
+    user_rating: float | None = None
+    user_rating_count: int = 0
+    cost_per_million_input: float | None = None
+    cost_per_million_output: float | None = None
 
 
 class RankingHighlightResponse(BaseModel):

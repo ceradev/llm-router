@@ -23,6 +23,7 @@ from packages.infrastructure.db.repositories.analysis_repository import Analysis
 from packages.infrastructure.db.repositories.attempt_repository import AttemptRepository
 from packages.infrastructure.db.repositories.evaluation_repository import EvaluationRepository
 from packages.infrastructure.db.repositories.execution_repository import ExecutionRepository
+from packages.infrastructure.db.repositories.metrics_repository import MetricsRepository
 from packages.infrastructure.db.repositories.model_repository import ModelRepository
 from packages.infrastructure.config.settings import get_settings
 from packages.infrastructure.db.repositories.request_repository import RequestRepository
@@ -71,6 +72,7 @@ class GatewayOrchestrator:
         self._eval_repo = EvaluationRepository(session)
         self._execution_repo = ExecutionRepository(session)
         self._attempt_repo = AttemptRepository(session)
+        self._metrics_repo = MetricsRepository(session)
 
     def _maybe_sync_openrouter_catalog(self) -> None:
         settings = get_settings()
@@ -193,6 +195,11 @@ class GatewayOrchestrator:
                 on_attempt=on_attempt,
             )
         except RoutingExhaustedError as exc:
+            self._metrics_repo.record_request(
+                session_id=session_id,
+                success=False,
+                latency_ms=0,
+            )
             raise RoutingExhaustedError(
                 exc.attempts,
                 exc.reason,
@@ -222,6 +229,12 @@ class GatewayOrchestrator:
             llm_req.id,
             selected_model_id=win_id,
             fallback_used=fallback_used,
+        )
+
+        self._metrics_repo.record_request(
+            session_id=session_id,
+            success=True,
+            latency_ms=outcome.response.latency_ms or 0,
         )
 
         ranking_summary = _build_ranking_summary(decision, priority=task.priority)

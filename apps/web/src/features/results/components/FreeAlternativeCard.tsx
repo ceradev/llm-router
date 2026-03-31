@@ -51,6 +51,22 @@ export function FreeAlternativeCard({
       ? model.cons.map((c) => translateCatalogProCon(c, t))
       : [t("freeAltConLowerAccuracy"), t("freeAltConSlower")]
 
+  const formatUserRating = (value: number | undefined): string => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
+    return value.toFixed(1)
+  }
+  const formatCostPerMillion = (value: number | undefined): string => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
+    return value.toFixed(value >= 1 ? 2 : 4)
+  }
+  const priceLine =
+    typeof model.costPerMillionInput === "number" &&
+    Number.isFinite(model.costPerMillionInput) &&
+    typeof model.costPerMillionOutput === "number" &&
+    Number.isFinite(model.costPerMillionOutput)
+      ? `$${formatCostPerMillion(model.costPerMillionInput)}/M in · $${formatCostPerMillion(model.costPerMillionOutput)}/M out`
+      : model.cost?.rel ?? "N/A"
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 10 }}
@@ -67,6 +83,11 @@ export function FreeAlternativeCard({
             {model.name}
           </h3>
           <p className="mt-1 text-sm text-(--text-muted)">{model.provider}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-(--text-muted)">
+            <span>★ {formatUserRating(model.userRating)}</span>
+            <span className="text-(--border-subtle)">·</span>
+            <span>{priceLine}</span>
+          </div>
           <ModelCapabilityBadges model={model} className="mt-2" />
           {model.rankingReasonKey ? (
             <p className="mt-3 text-sm leading-relaxed text-(--text-muted)">

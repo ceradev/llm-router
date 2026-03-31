@@ -50,7 +50,7 @@ export function DemoLoading({
         <p className="text-xs font-semibold uppercase tracking-wider text-(--text-accent)">
           LOADING
         </p>
-        <span className="rounded-full border border-[#3B82F6]/20 bg-[#3B82F6]/10 px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
+        <span className="rounded-full border border-(--border-subtle) bg-(--surface-glass) px-2 py-1 text-[11px] font-semibold text-(--text-muted)">
           Typing AI
         </span>
       </div>
@@ -61,7 +61,7 @@ export function DemoLoading({
           className="pointer-events-none absolute inset-0 opacity-70"
           style={{
             background:
-              "radial-gradient(circle at 30% 10%, rgba(59,130,246,0.25), transparent 55%), radial-gradient(circle at 80% 60%, rgba(14,165,233,0.18), transparent 56%)",
+              "radial-gradient(circle at 30% 10%, rgba(59,130,246,0.16), transparent 55%), radial-gradient(circle at 80% 60%, rgba(14,165,233,0.12), transparent 56%)",
           }}
         />
 
@@ -93,7 +93,7 @@ export function DemoLoading({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
-              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(59,130,246,0.6),transparent)]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(59,130,246,0.28),transparent)]"
               style={{ transform: "translateX(-60%)" }}
             />
           )}

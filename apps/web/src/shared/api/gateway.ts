@@ -51,6 +51,7 @@ export type GatewayBackendResponse = {
     latency_score: number
     cost_score: number
     final_score: number
+    model_score_adjustment: number
     explanation: string
     pros: string[] | null
     cons: string[] | null
@@ -71,6 +72,10 @@ export type GatewayBackendResponse = {
     model_type_labels?: string[]
     is_verified?: boolean
     public_status_key?: string | null
+    user_rating?: number | null
+    user_rating_count?: number
+    cost_per_million_input?: number | null
+    cost_per_million_output?: number | null
   }>
   fallback_used: boolean
   candidate_models: string[]

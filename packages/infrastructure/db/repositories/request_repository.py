@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func
@@ -74,6 +75,33 @@ class RequestRepository:
 
     def count_requests_by_session(self, *, session_id: str) -> int:
         stmt = select(func.count(LLMRequest.id)).where(LLMRequest.session_id == session_id)
+        return int(self.session.exec(stmt).one())
+
+    def count_requests_for_date(self, *, target_date: date) -> int:
+        start = datetime.combine(target_date, datetime.min.time())
+        end = start + timedelta(days=1)
+        stmt = select(func.count(LLMRequest.id)).where(
+            LLMRequest.created_at >= start,
+            LLMRequest.created_at < end,
+        )
+        return int(self.session.exec(stmt).one())
+
+    def list_requests_for_date(self, *, target_date: date, limit: int = 20) -> list[LLMRequest]:
+        start = datetime.combine(target_date, datetime.min.time())
+        end = start + timedelta(days=1)
+        stmt = (
+            select(LLMRequest)
+            .where(LLMRequest.created_at >= start, LLMRequest.created_at < end)
+            .options(
+                selectinload(LLMRequest.selected_model),
+            )
+            .order_by(LLMRequest.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.exec(stmt).all())
+
+    def count_selected_by_model_id(self, *, model_id: int) -> int:
+        stmt = select(func.count(LLMRequest.id)).where(LLMRequest.selected_model_id == model_id)
         return int(self.session.exec(stmt).one())
 
     def get_request_with_details(

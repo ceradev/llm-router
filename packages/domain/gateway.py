@@ -105,9 +105,12 @@ class ScoredCandidate:
     latency_score: float
     cost_score: float
     final_score: float
+    model_score_adjustment: float
     explanation: str
     pros: tuple[str, ...]
     cons: tuple[str, ...]
+    user_rating: float | None = None
+    user_rating_count: int = 0
 
 
 @dataclass(frozen=True)

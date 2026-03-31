@@ -4,13 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import func
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
 from packages.domain.gateway import Priority
-from packages.domain.models import Capability, ModelProfile
+from packages.domain.models import BenchmarkScope, Capability, ModelProfile
 from sqlalchemy import delete
 
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
+from packages.infrastructure.db.models.model_benchmark_run import BenchmarkKind, ModelBenchmarkRun
 from packages.infrastructure.db.models.llm_model_capability import LLMModelCapability
 from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
 from packages.infrastructure.db.models.provider import Provider
@@ -28,6 +30,12 @@ class ModelRoutingRow:
     model: ModelProfile
     priority_weight: int
     db_model_id: int
+
+
+@dataclass(frozen=True)
+class AdminModelRow:
+    llm_model: LLMModel
+    provider: Provider
 
 
 def _count_scalar(result: object) -> int:
@@ -74,6 +82,32 @@ class ModelRepository:
             by_mid[mid].add(row.capability)
         return by_mid
 
+    def _verification_scopes_by_model_ids(self, model_ids: list[int]) -> dict[int, set[BenchmarkScope]]:
+        if not model_ids:
+            return {}
+        stmt = (
+            select(
+                ModelBenchmarkRun.model_id,
+                ModelBenchmarkRun.benchmark_scope,
+                func.max(ModelBenchmarkRun.id).label("max_id"),
+            )
+            .where(ModelBenchmarkRun.model_id.in_(model_ids))
+            .where(ModelBenchmarkRun.benchmark_kind == BenchmarkKind.LIVE.value)
+            .group_by(ModelBenchmarkRun.model_id, ModelBenchmarkRun.benchmark_scope)
+        )
+        try:
+            rows = self.session.exec(stmt).all()
+        except OperationalError:
+            return {}
+        scopes: dict[int, set[BenchmarkScope]] = {}
+        for model_id, scope_str, _max_id in rows:
+            try:
+                scope = BenchmarkScope(str(scope_str))
+            except ValueError:
+                continue
+            scopes.setdefault(int(model_id), set()).add(scope)
+        return scopes
+
     def list_routing_candidates(
         self,
         *,
@@ -109,6 +143,7 @@ class ModelRepository:
 
         model_ids = [llm_model.id for llm_model, _p, _r in rows if llm_model.id is not None]
         extra_caps = self._capability_rows_for_models([mid for mid in model_ids if mid is not None])
+        verification_scopes_by_mid = self._verification_scopes_by_model_ids([mid for mid in model_ids if mid is not None])
 
         mapped: list[ModelRoutingRow] = []
         for llm_model, provider, routing in rows:
@@ -136,6 +171,9 @@ class ModelRepository:
                 supports_vision=llm_model.supports_vision,
                 input_modalities=_modalities_tuple(llm_model.input_modalities),
                 output_modalities=_modalities_tuple(llm_model.output_modalities),
+                prompt_price=llm_model.prompt_price,
+                completion_price=llm_model.completion_price,
+                verification_scopes=verification_scopes_by_mid.get(llm_model.id, set()),
             )
             mapped.append(
                 ModelRoutingRow(
@@ -159,6 +197,7 @@ class ModelRepository:
 
         model_ids = [llm_model.id for llm_model, _p, _r in rows if llm_model.id is not None]
         extra_caps = self._capability_rows_for_models([mid for mid in model_ids if mid is not None])
+        verification_scopes_by_mid = self._verification_scopes_by_model_ids([mid for mid in model_ids if mid is not None])
 
         models: list[ModelProfile] = []
         for llm_model, provider, routing in rows:
@@ -182,6 +221,9 @@ class ModelRepository:
                     supports_vision=llm_model.supports_vision,
                     input_modalities=_modalities_tuple(llm_model.input_modalities),
                     output_modalities=_modalities_tuple(llm_model.output_modalities),
+                    prompt_price=llm_model.prompt_price,
+                    completion_price=llm_model.completion_price,
+                    verification_scopes=verification_scopes_by_mid.get(llm_model.id, set()),
                 )
             )
         return models
@@ -193,6 +235,44 @@ class ModelRepository:
     def get_llm_model_by_routing_key(self, routing_key: str) -> LLMModel | None:
         stmt = select(LLMModel).where(LLMModel.routing_key == routing_key)
         return self.session.exec(stmt).first()
+
+    def get_model_with_provider_by_routing_key(self, *, routing_key: str) -> AdminModelRow | None:
+        stmt = (
+            select(LLMModel, Provider)
+            .join(Provider, Provider.id == LLMModel.provider_id)
+            .where(LLMModel.routing_key == routing_key)
+            .limit(1)
+        )
+        row = self.session.exec(stmt).first()
+        if row is None:
+            return None
+        llm_model, provider = row
+        return AdminModelRow(llm_model=llm_model, provider=provider)
+
+    def list_models_for_admin(
+        self,
+        *,
+        provider_slug: str | None = None,
+        tier: str | None = None,
+        is_available: bool | None = None,
+        evaluation_status: str | None = None,
+    ) -> list[AdminModelRow]:
+        stmt = (
+            select(LLMModel, Provider)
+            .join(Provider, Provider.id == LLMModel.provider_id)
+            .where(LLMModel.is_active.is_(True))
+            .order_by(LLMModel.routing_key.asc())
+        )
+        if provider_slug:
+            stmt = stmt.where(func.lower(Provider.slug) == provider_slug.strip().lower())
+        if tier:
+            stmt = stmt.where(func.lower(LLMModel.tier) == tier.strip().lower())
+        if is_available is not None:
+            stmt = stmt.where(LLMModel.is_available.is_(is_available))
+        if evaluation_status:
+            stmt = stmt.where(func.lower(LLMModel.evaluation_status) == evaluation_status.strip().lower())
+        rows = self.session.exec(stmt).all()
+        return [AdminModelRow(llm_model=llm_model, provider=provider) for llm_model, provider in rows]
 
     def count_llm_models(self) -> int:
         stmt = select(func.count(LLMModel.id))

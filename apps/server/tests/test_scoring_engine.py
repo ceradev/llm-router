@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from packages.core.scoring.engine import compute_model_score
 from packages.domain.gateway import Priority
 from packages.domain.models import Capability, ModelProfile
@@ -122,4 +124,56 @@ def test_verified_confidence_bonus_prefers_verified_when_scores_equal() -> None:
     provisional_score = compute_model_score(model=provisional, **kw).total
 
     assert verified_score > provisional_score
+
+
+def test_feedback_adjustment_not_applied_below_minimum_ratings() -> None:
+    base = _base_profile()
+    without_feedback = compute_model_score(
+        model=base,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+    )
+    below_threshold = compute_model_score(
+        model=base,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        avg_rating=5.0,
+        ratings_count=4,
+    )
+    assert below_threshold.total == pytest.approx(without_feedback.total)
+    assert below_threshold.model_score_adjustment == pytest.approx(0.0)
+
+
+def test_feedback_adjustment_applies_formula_after_threshold() -> None:
+    base = _base_profile()
+    scored = compute_model_score(
+        model=base,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        avg_rating=4.5,
+        ratings_count=7,
+    )
+    expected_factor = 4.5 / 3.0
+    assert scored.total == pytest.approx(scored.base_total * expected_factor)
+    assert scored.model_score_adjustment == pytest.approx(scored.adjusted_total - scored.base_total)
+
+
+def test_feedback_adjustment_penalizes_and_boosts() -> None:
+    base = _base_profile()
+    penalized = compute_model_score(
+        model=base,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        avg_rating=2.0,
+        ratings_count=6,
+    )
+    boosted = compute_model_score(
+        model=base,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        avg_rating=4.0,
+        ratings_count=6,
+    )
+    assert penalized.total < penalized.base_total
+    assert boosted.total > boosted.base_total
 

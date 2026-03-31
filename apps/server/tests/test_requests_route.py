@@ -250,3 +250,105 @@ def test_post_feedback_400_without_selected_model(
         headers={"X-Session-Id": "feedback-session-2"},
     )
     assert r.status_code == 400
+
+
+def test_post_model_feedback_201_with_request_id(
+    requests_client_and_engine: tuple[TestClient, Engine],
+) -> None:
+    client, engine = requests_client_and_engine
+    with Session(engine) as session:
+        _, mid = _seed_provider_and_model(session)
+        req = LLMRequest(
+            prompt="x",
+            intent="general",
+            priority="normal",
+            require_json=False,
+            session_id="feedback-model-session",
+            selected_model_id=mid,
+            fallback_used=False,
+        )
+        session.add(req)
+        session.commit()
+        session.refresh(req)
+        rid = str(req.id)
+
+    r = client.post(
+        "/v1/models/openai/gpt-test/feedback",
+        json={"rating": 4, "comment": "good", "request_id": rid},
+        headers={"X-Session-Id": "feedback-model-session"},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["rating"] == 4
+    assert body["comment"] == "good"
+    assert body["request_id"] == rid
+    assert body["model_id"] == mid
+
+
+def test_post_model_feedback_201_without_request_id(
+    requests_client_and_engine: tuple[TestClient, Engine],
+) -> None:
+    client, engine = requests_client_and_engine
+    with Session(engine) as session:
+        _seed_provider_and_model(session)
+        session.commit()
+    r = client.post(
+        "/v1/models/openai/gpt-test/feedback",
+        json={"rating": 5},
+        headers={"X-Session-Id": "feedback-model-session"},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["rating"] == 5
+    assert body["request_id"] is None
+
+
+def test_post_model_feedback_201_with_openrouter_style_routing_key(
+    requests_client_and_engine: tuple[TestClient, Engine],
+) -> None:
+    client, engine = requests_client_and_engine
+    with Session(engine) as session:
+        _, mid = _seed_provider_and_model(session)
+        model = session.get(LLMModel, mid)
+        assert model is not None
+        model.routing_key = "openrouter/openai/gpt-test"
+        session.add(model)
+        session.commit()
+
+    r = client.post(
+        "/v1/models/openrouter/openai/gpt-test/feedback",
+        json={"rating": 5},
+        headers={"X-Session-Id": "feedback-model-session"},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["rating"] == 5
+    assert body["model_id"] == mid
+
+
+def test_post_model_feedback_403_on_request_session_mismatch(
+    requests_client_and_engine: tuple[TestClient, Engine],
+) -> None:
+    client, engine = requests_client_and_engine
+    with Session(engine) as session:
+        _, mid = _seed_provider_and_model(session)
+        req = LLMRequest(
+            prompt="x",
+            intent="general",
+            priority="normal",
+            require_json=False,
+            session_id="correct-feedback-session",
+            selected_model_id=mid,
+            fallback_used=False,
+        )
+        session.add(req)
+        session.commit()
+        session.refresh(req)
+        rid = str(req.id)
+
+    r = client.post(
+        "/v1/models/openai/gpt-test/feedback",
+        json={"rating": 3, "request_id": rid},
+        headers={"X-Session-Id": "wrong-feedback-session"},
+    )
+    assert r.status_code == 403

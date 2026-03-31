@@ -19,11 +19,17 @@ export function MainNavbar({
   title,
 }: Readonly<Props>) {
   const { t } = useI18n()
+  const appName = t("appName")
+  const brandTitle = (
+    <span className="inline-flex items-center gap-2">
+      <span>{appName}</span>
+    </span>
+  )
 
   return (
     <AppNavbar
       className={className}
-      title={title ?? t("appName")}
+      title={title ?? brandTitle}
       rightSlot={
         <NavbarToolbar
           historySlot={

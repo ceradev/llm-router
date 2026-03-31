@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -11,12 +12,12 @@ from packages.domain.models import Capability
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
 from packages.infrastructure.db.models.llm_model_capability import LLMModelCapability
 from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
-from packages.infrastructure.db.models.model_benchmark_run import BenchmarkKind, BenchmarkRunStatus, ModelBenchmarkRun
+from packages.infrastructure.db.models.model_benchmark_run import BenchmarkKind, BenchmarkRunStatus, BenchmarkScope, ModelBenchmarkRun
 from packages.infrastructure.db.models.model_evaluation import ModelEvaluation
 from packages.infrastructure.db.repositories.model_repository import ModelRepository
 from packages.infrastructure.db.seed_types import SeededModelUpsertParams
 from packages.infrastructure.db.models.provider import Provider
-from packages.infrastructure.providers.openrouter_client import ChatCompletionResult
+from packages.infrastructure.providers.openrouter_client import ChatCompletionResult, OpenRouterClientError
 from packages.services.benchmark.live_model_benchmark_service import CURRENT_LIVE_VERSION, LiveModelBenchmarkService
 from packages.services.benchmark.model_benchmark_service import (
     CURRENT_HEURISTIC_VERSION,
@@ -512,7 +513,7 @@ def test_live_benchmark_raises_when_model_still_cataloged() -> None:
             svc.run_live_benchmark_for_model(model_id=m.id)
 
 
-def test_heuristic_skips_multimodal_without_promotion() -> None:
+def test_heuristic_evaluates_vision_model_in_text_scope() -> None:
     engine = _engine()
     with Session(engine) as session:
         p = Provider(slug="openai", display_name="OpenAI", is_active=True)
@@ -544,8 +545,469 @@ def test_heuristic_skips_multimodal_without_promotion() -> None:
         out = svc.run_heuristic_screening(model_id=m.id)
         session.commit()
 
-        assert out.passed is False
-        assert out.status == BenchmarkRunStatus.SKIPPED_UNSUPPORTED
+        assert out.passed is True
+        assert out.status == BenchmarkRunStatus.COMPLETED
         m2 = session.get(LLMModel, m.id)
         assert m2 is not None
-        assert m2.evaluation_status == ModelEvaluationStatus.CATALOGED
+        assert m2.evaluation_status == ModelEvaluationStatus.PROVISIONAL
+        run = session.exec(select(ModelBenchmarkRun).where(ModelBenchmarkRun.model_id == m.id)).one()
+        assert run.benchmark_scope == BenchmarkScope.TEXT.value
+
+
+def test_heuristic_evaluates_text_plus_file_image_model_in_text_scope() -> None:
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="anthropic", display_name="Anthropic", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="multimodal-text",
+            routing_key="openrouter/anthropic/multimodal-text",
+            display_name="Multimodal Text",
+            is_active=True,
+            is_available=True,
+            supports_json=True,
+            supports_tools=False,
+            supports_vision=True,
+            tier="premium",
+            context_window=200_000,
+            max_output_tokens=4096,
+            input_modalities=["text", "image", "file"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.CATALOGED,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = ModelBenchmarkService(session)
+        out = svc.run_heuristic_screening(model_id=m.id)
+        session.commit()
+
+        assert out.passed is True
+        assert out.status == BenchmarkRunStatus.COMPLETED
+        run = session.exec(select(ModelBenchmarkRun).where(ModelBenchmarkRun.model_id == m.id)).one()
+        assert run.benchmark_scope == BenchmarkScope.TEXT.value
+
+
+def test_heuristic_image_text_v2_promotes_to_provisional() -> None:
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="vision-v2",
+            routing_key="openrouter/openai/vision-v2",
+            display_name="Vision V2",
+            is_active=True,
+            is_available=True,
+            supports_json=True,
+            supports_tools=False,
+            supports_vision=True,
+            tier="premium",
+            context_window=8_000,
+            max_output_tokens=1024,
+            input_modalities=["text", "image"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.CATALOGED,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = ModelBenchmarkService(session)
+        out = svc.run_heuristic_screening(model_id=m.id, enable_image_text_v2=True)
+        session.commit()
+
+        assert out.passed is True
+        assert out.status == BenchmarkRunStatus.COMPLETED
+        m2 = session.get(LLMModel, m.id)
+        assert m2 is not None
+        assert m2.evaluation_status == ModelEvaluationStatus.PROVISIONAL
+        run = session.exec(select(ModelBenchmarkRun).where(ModelBenchmarkRun.model_id == m.id)).one()
+        assert run.benchmark_scope == BenchmarkScope.IMAGE_TO_TEXT.value
+
+
+def test_live_image_text_v2_strict_uses_image_case_and_verifies() -> None:
+    class _VisionClient:
+        def chat_completion(
+            self,
+            *,
+            model: str,
+            messages: list[dict[str, Any]],
+            max_tokens: int,
+            temperature: float,
+            response_format: dict[str, Any] | None,
+            tools: list[dict[str, Any]] | None,
+            tool_choice: str | object | None,
+        ) -> ChatCompletionResult:
+            _ = model, max_tokens, temperature, tools, tool_choice
+            content = messages[0].get("content")
+            if isinstance(content, list):
+                return ChatCompletionResult(
+                    content='{"label":"red_square","dominant_color":"red"}',
+                    model="vision",
+                    input_tokens=20,
+                    output_tokens=16,
+                    latency_ms=90,
+                    raw={},
+                )
+            if response_format is not None and response_format.get("type") == "json_object":
+                return ChatCompletionResult(
+                    content='{"hello":"world","n":42}',
+                    model="vision",
+                    input_tokens=8,
+                    output_tokens=8,
+                    latency_ms=40,
+                    raw={},
+                )
+            return ChatCompletionResult(
+                content="PONG",
+                model="vision",
+                input_tokens=5,
+                output_tokens=2,
+                latency_ms=30,
+                raw={},
+            )
+
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="vision-live-v2",
+            routing_key="openrouter/openai/vision-live-v2",
+            openrouter_model_id="openai/vision-live-v2",
+            display_name="Vision Live V2",
+            is_active=True,
+            is_available=True,
+            supports_json=True,
+            supports_tools=False,
+            supports_vision=True,
+            tier="premium",
+            context_window=32_000,
+            max_output_tokens=1024,
+            input_modalities=["text", "image"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.PROVISIONAL,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = LiveModelBenchmarkService(session, completion_client=_VisionClient())
+        out = svc.run_live_benchmark_for_model(
+            model_id=m.id,
+            enable_image_text_v2=True,
+            strict_image_text_checks=True,
+        )
+        session.commit()
+
+        assert out.passed is True
+        assert out.evaluation_status_after == ModelEvaluationStatus.VERIFIED
+        run = session.exec(
+            select(ModelBenchmarkRun).where(
+                ModelBenchmarkRun.model_id == m.id,
+                ModelBenchmarkRun.benchmark_kind == BenchmarkKind.LIVE.value,
+            )
+        ).one()
+        assert run.benchmark_scope == BenchmarkScope.IMAGE_TO_TEXT.value
+
+
+def test_heuristic_file_text_v3_promotes_to_provisional() -> None:
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="file-v3",
+            routing_key="openrouter/openai/file-v3",
+            display_name="File V3",
+            is_active=True,
+            is_available=True,
+            supports_json=True,
+            supports_tools=False,
+            supports_vision=False,
+            tier="premium",
+            context_window=8_000,
+            max_output_tokens=1024,
+            input_modalities=["text", "file"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.CATALOGED,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = ModelBenchmarkService(session)
+        out = svc.run_heuristic_screening(model_id=m.id, enable_file_text_v3=True)
+        session.commit()
+
+        assert out.passed is True
+        assert out.status == BenchmarkRunStatus.COMPLETED
+        m2 = session.get(LLMModel, m.id)
+        assert m2 is not None
+        assert m2.evaluation_status == ModelEvaluationStatus.PROVISIONAL
+        run = session.exec(select(ModelBenchmarkRun).where(ModelBenchmarkRun.model_id == m.id)).one()
+        assert run.benchmark_scope == BenchmarkScope.FILE_TO_TEXT.value
+
+
+def test_live_file_text_v3_strict_uses_txt_csv_cases_and_verifies() -> None:
+    class _FileClient:
+        def chat_completion(
+            self,
+            *,
+            model: str,
+            messages: list[dict[str, Any]],
+            max_tokens: int,
+            temperature: float,
+            response_format: dict[str, Any] | None,
+            tools: list[dict[str, Any]] | None,
+            tool_choice: str | object | None,
+        ) -> ChatCompletionResult:
+            _ = model, max_tokens, temperature, response_format, tools, tool_choice
+            content = messages[0].get("content")
+            if isinstance(content, list):
+                payload = json.dumps(content)
+                if "sample.csv" in payload:
+                    return ChatCompletionResult(
+                        content='{"source_type":"csv","row_count":1}',
+                        model="file",
+                        input_tokens=16,
+                        output_tokens=12,
+                        latency_ms=70,
+                        raw={},
+                    )
+                if "sample.txt" in payload:
+                    return ChatCompletionResult(
+                        content='{"source_type":"txt","contains_hello":true}',
+                        model="file",
+                        input_tokens=16,
+                        output_tokens=12,
+                        latency_ms=70,
+                        raw={},
+                    )
+            return ChatCompletionResult(
+                content="PONG",
+                model="file",
+                input_tokens=5,
+                output_tokens=2,
+                latency_ms=30,
+                raw={},
+            )
+
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="file-live-v3",
+            routing_key="openrouter/openai/file-live-v3",
+            openrouter_model_id="openai/file-live-v3",
+            display_name="File Live V3",
+            is_active=True,
+            is_available=True,
+            supports_json=False,
+            supports_tools=False,
+            supports_vision=False,
+            tier="premium",
+            context_window=32_000,
+            max_output_tokens=1024,
+            input_modalities=["text", "file"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.PROVISIONAL,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = LiveModelBenchmarkService(session, completion_client=_FileClient())
+        out = svc.run_live_benchmark_for_model(
+            model_id=m.id,
+            enable_file_text_v3=True,
+            strict_file_text_checks=True,
+        )
+        session.commit()
+
+        assert out.passed is True
+        assert out.evaluation_status_after == ModelEvaluationStatus.VERIFIED
+        run = session.exec(
+            select(ModelBenchmarkRun).where(
+                ModelBenchmarkRun.model_id == m.id,
+                ModelBenchmarkRun.benchmark_kind == BenchmarkKind.LIVE.value,
+            )
+        ).one()
+        assert run.benchmark_scope == BenchmarkScope.FILE_TO_TEXT.value
+
+
+def test_live_non_chat_model_is_skipped_unsupported() -> None:
+    class _NonChatClient:
+        def chat_completion(
+            self,
+            *,
+            model: str,
+            messages: list[dict[str, Any]],
+            max_tokens: int,
+            temperature: float,
+            response_format: dict[str, Any] | None,
+            tools: list[dict[str, Any]] | None,
+            tool_choice: str | object | None,
+        ) -> ChatCompletionResult:
+            _ = model, messages, max_tokens, temperature, response_format, tools, tool_choice
+            raise OpenRouterClientError(
+                "OpenRouter chat completion failed: 404 | detail: "
+                "This is not a chat model and thus not supported in the v1/chat/completions endpoint. "
+                "Did you mean to use v1/completions?"
+            )
+
+        def completion(
+            self,
+            *,
+            model: str,
+            prompt: str,
+            max_tokens: int,
+            temperature: float,
+        ) -> ChatCompletionResult:
+            _ = model, prompt, max_tokens, temperature
+            return ChatCompletionResult(
+                content="PONG",
+                model="legacy-completions",
+                input_tokens=4,
+                output_tokens=2,
+                latency_ms=20,
+                raw={},
+            )
+
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="openai", display_name="OpenAI", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="legacy-completions",
+            routing_key="openrouter/openai/legacy-completions",
+            openrouter_model_id="openai/legacy-completions",
+            display_name="Legacy Completions",
+            is_active=True,
+            is_available=True,
+            supports_json=True,
+            supports_tools=False,
+            supports_vision=False,
+            tier="premium",
+            context_window=16_000,
+            max_output_tokens=1024,
+            input_modalities=["text"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.PROVISIONAL,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = LiveModelBenchmarkService(session, completion_client=_NonChatClient())
+        out = svc.run_live_benchmark_for_model(model_id=m.id)
+        session.commit()
+
+        assert out.passed is False
+        assert out.status == BenchmarkRunStatus.SKIPPED_UNSUPPORTED
+        assert out.evaluation_status_after == ModelEvaluationStatus.PROVISIONAL
+        run = session.exec(
+            select(ModelBenchmarkRun).where(
+                ModelBenchmarkRun.model_id == m.id,
+                ModelBenchmarkRun.benchmark_kind == BenchmarkKind.LIVE.value,
+            )
+        ).one()
+        assert run.status == BenchmarkRunStatus.SKIPPED_UNSUPPORTED.value
+        assert run.summary.startswith("Live benchmark skipped:")
+        raw = run.raw_results_json
+        assert isinstance(raw, dict)
+        probe = raw.get("completion_probe")
+        assert isinstance(probe, dict)
+        assert probe.get("ok") is True
+
+
+def test_live_json_non_chat_like_error_does_not_force_skip_when_general_passes() -> None:
+    class _MixedClient:
+        def chat_completion(
+            self,
+            *,
+            model: str,
+            messages: list[dict[str, Any]],
+            max_tokens: int,
+            temperature: float,
+            response_format: dict[str, Any] | None,
+            tools: list[dict[str, Any]] | None,
+            tool_choice: str | object | None,
+        ) -> ChatCompletionResult:
+            _ = model, messages, max_tokens, temperature, tools, tool_choice
+            if response_format is not None and response_format.get("type") == "json_object":
+                raise OpenRouterClientError(
+                    "OpenRouter chat completion failed: 404 | detail: "
+                    "This is not a chat model and thus not supported in the v1/chat/completions endpoint. "
+                    "Did you mean to use v1/completions?"
+                )
+            return ChatCompletionResult(
+                content="PONG",
+                model="mixed",
+                input_tokens=5,
+                output_tokens=2,
+                latency_ms=30,
+                raw={},
+            )
+
+    engine = _engine()
+    with Session(engine) as session:
+        p = Provider(slug="google", display_name="Google", is_active=True)
+        session.add(p)
+        session.flush()
+
+        m = LLMModel(
+            provider_id=p.id,
+            external_model_id="gemini-2.5-pro",
+            routing_key="openrouter/google/gemini-2.5-pro",
+            openrouter_model_id="google/gemini-2.5-pro",
+            display_name="Gemini 2.5 Pro",
+            is_active=True,
+            is_available=True,
+            supports_json=True,
+            supports_tools=False,
+            supports_vision=False,
+            tier="premium",
+            context_window=1_000_000,
+            max_output_tokens=8192,
+            input_modalities=["text"],
+            output_modalities=["text"],
+            evaluation_status=ModelEvaluationStatus.PROVISIONAL,
+        )
+        session.add(m)
+        session.flush()
+        session.commit()
+
+        svc = LiveModelBenchmarkService(session, completion_client=_MixedClient())
+        out = svc.run_live_benchmark_for_model(model_id=m.id)
+        session.commit()
+
+        assert out.status == BenchmarkRunStatus.FAILED
+        run = session.exec(
+            select(ModelBenchmarkRun).where(
+                ModelBenchmarkRun.model_id == m.id,
+                ModelBenchmarkRun.benchmark_kind == BenchmarkKind.LIVE.value,
+            )
+        ).one()
+        assert run.status == BenchmarkRunStatus.FAILED.value

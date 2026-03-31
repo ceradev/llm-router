@@ -9,11 +9,13 @@ from sqlmodel import Session
 from app.api.dependencies.orchestrator import get_db_session
 from packages.infrastructure.db.models.llm_request import LLMRequest
 from packages.infrastructure.db.repositories.feedback_repository import FeedbackRepository
+from packages.infrastructure.db.repositories.model_repository import ModelRepository
 from packages.infrastructure.db.repositories.request_repository import RequestRepository
 from packages.schemas.request_history import (
     AttemptDetail,
     ExecutionDetail,
     FeedbackDetail,
+    ModelFeedbackRequest,
     FeedbackRequest,
     ModelEvaluationDetail,
     RequestAnalysisDetail,
@@ -23,9 +25,10 @@ from packages.schemas.request_history import (
 )
 
 router = APIRouter(prefix="/v1", tags=["requests"])
-
 LIST_PROMPT_MAX = 100
 _MSG_NOT_FOUND = "Request not found"
+_MSG_SESSION_REQUIRED = "X-Session-Id required"
+_MSG_SESSION_MISMATCH = "Session mismatch"
 
 
 def _truncate_list_prompt(text: str) -> str:
@@ -192,14 +195,14 @@ def get_request_detail(
     x_session_id: Annotated[str, Header(alias="X-Session-Id")],
 ) -> RequestDetailResponse:
     if not x_session_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-Session-Id required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_MSG_SESSION_REQUIRED)
 
     repo = RequestRepository(session)
     row = repo.get_request_by_id(request_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
     if row.session_id != x_session_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session mismatch")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_MSG_SESSION_MISMATCH)
 
     full = repo.get_request_with_details(request_id=request_id, session_id=x_session_id)
     if full is None:
@@ -218,14 +221,14 @@ def submit_feedback(
     x_session_id: Annotated[str, Header(alias="X-Session-Id")],
 ) -> FeedbackDetail:
     if not x_session_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-Session-Id required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_MSG_SESSION_REQUIRED)
 
     repo = RequestRepository(session)
     row = repo.get_request_by_id(request_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
     if row.session_id != x_session_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session mismatch")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_MSG_SESSION_MISMATCH)
     if row.selected_model_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -236,6 +239,49 @@ def submit_feedback(
     saved = fb_repo.save_feedback(
         request_id=request_id,
         model_id=row.selected_model_id,
+        rating=payload.rating,
+        comment=payload.comment,
+    )
+    return FeedbackDetail(
+        id=saved.id,
+        request_id=saved.request_id,
+        model_id=saved.model_id,
+        rating=saved.rating,
+        comment=saved.comment,
+        created_at=saved.created_at,
+    )
+
+
+@router.post(
+    "/models/{model_id:path}/feedback",
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_model_feedback(
+    model_id: str,
+    payload: ModelFeedbackRequest,
+    session: Annotated[Session, Depends(get_db_session)],
+    x_session_id: Annotated[str, Header(alias="X-Session-Id")],
+) -> FeedbackDetail:
+    if not x_session_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_MSG_SESSION_REQUIRED)
+
+    repo = RequestRepository(session)
+    if payload.request_id is not None:
+        row = repo.get_request_by_id(payload.request_id)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_MSG_NOT_FOUND)
+        if row.session_id != x_session_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_MSG_SESSION_MISMATCH)
+
+    model_repo = ModelRepository(session)
+    db_model_id = model_repo.get_model_id_by_routing_key(model_id)
+    if db_model_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+
+    fb_repo = FeedbackRepository(session)
+    saved = fb_repo.save_feedback(
+        request_id=payload.request_id,
+        model_id=db_model_id,
         rating=payload.rating,
         comment=payload.comment,
     )

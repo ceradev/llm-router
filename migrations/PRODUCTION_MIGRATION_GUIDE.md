@@ -1,0 +1,149 @@
+-- ============================================================
+-- SQL Dump Complete - LLM Router Database
+-- Generated for production migration
+-- ============================================================
+-- 
+-- Este script exporta TODOS los datos de la base de datos.
+-- Tablas incluidas:
+--   - providers
+--   - llm_models
+--   - llm_model_capabilities
+--   - llm_model_routing_settings
+--   - llm_requests (historial de requests)
+--   - request_analysis
+--   - model_evaluation
+--   - llm_attempt
+--   - llm_execution
+--   - llm_feedback
+--   - provider_sync_runs
+--   - model_benchmark_runs
+--   - daily_metrics
+--
+-- Para exportar desde desarrollo, ejecuta:
+--   pg_dump -h localhost -U <user> -d llm_router --data-only --column-inserts > dump_data.sql
+--
+-- Para importar en producción:
+--   psql -h <prod_host> -U <user> -d llm_router_prod < dump_data.sql
+--
+-- NOTA: Si hay conflictos de IDs, considerar reseedear sequences:
+--   SELECT setval(pg_get_serial_sequence('table_name', 'id'), (SELECT MAX(id) FROM table_name));
+
+-- ============================================================
+-- Providers
+-- ============================================================
+-- Tabla: providers
+-- Contiene los proveedores de modelos (OpenAI, Anthropic, etc.)
+
+-- ============================================================
+-- Models
+-- ============================================================
+-- Tabla: llm_models
+-- Catálogo de modelos disponibles
+
+-- ============================================================
+-- Model Capabilities
+-- ============================================================
+-- Tabla: llm_model_capabilities
+-- Capacidades de cada modelo (json, tools, vision, etc.)
+
+-- ============================================================
+-- Model Routing Settings
+-- ============================================================
+-- Tabla: llm_model_routing_settings
+-- Configuración de routing por modelo
+
+-- ============================================================
+-- Requests
+-- ============================================================
+-- Tabla: llm_requests
+-- Historial de requests realizados
+
+-- ============================================================
+-- Request Analysis
+-- ============================================================
+-- Tabla: request_analysis
+-- Análisis de cada request
+
+-- ============================================================
+-- Model Evaluation
+-- ============================================================
+-- Tabla: model_evaluation
+-- Evaluaciones de modelos por request
+
+-- ============================================================
+-- Attempts
+-- ============================================================
+-- Tabla: llm_attempt
+-- Intentos de ejecución por request
+
+-- ============================================================
+-- Executions
+-- ============================================================
+-- Tabla: llm_execution
+-- Ejecuciones finales por request
+
+-- ============================================================
+-- Feedback
+-- ============================================================
+-- Tabla: llm_feedback
+-- Feedback de usuarios por request
+
+-- ============================================================
+-- Sync Runs
+-- ============================================================
+-- Tabla: provider_sync_runs
+-- Historial de sincronizaciones con proveedores
+
+-- ============================================================
+-- Benchmark Runs
+-- ============================================================
+-- Tabla: model_benchmark_runs
+-- Historial de benchmarks de modelos
+
+-- ============================================================
+-- Metrics
+-- ============================================================
+-- Tabla: daily_metrics
+-- Métricas diarias de uso
+
+-- ============================================================
+-- INSTRUCCIONES DE USO
+-- ============================================================
+--
+-- Para hacer el dump completo desde tu base de datos local:
+--
+-- 1. Asegúrate de que PostgreSQL esté corriendo
+--
+-- 2. Ejecuta pg_dump con este comando:
+--
+--    pg_dump -h localhost -U postgres -d llm_router \
+--      --data-only \
+--      --column-inserts \
+--      --no-owner \
+--      --no-privileges \
+--      > migrations/production_data.sql
+--
+--    (Ajusta el host, usuario y nombre de DB según tu configuración)
+--
+-- 3. Para importar en producción:
+--
+--    psql -h <production_host> -U <user> -d llm_router_prod \
+--      < migrations/production_data.sql
+--
+-- 4. Si hay errores de conflictos de IDs, ejecuta:
+--
+--    SELECT setval('providers_id_seq', (SELECT MAX(id) FROM providers));
+--    SELECT setval('llm_models_id_seq', (SELECT MAX(id) FROM llm_models));
+--    SELECT setval('llm_requests_id_seq', (SELECT MAX(id) FROM llm_requests));
+--    -- etc. para cada tabla con序列
+--
+-- NOTA: Este dump incluye TODOS los datos. Si quieres solo el catálogo
+-- (providers y models), puedes filtrar las tablas al importar o hacer
+-- un dump selectivo:
+--
+--    pg_dump -h localhost -U postgres -d llm_router \
+--      --data-only \
+--      --column-inserts \
+--      -t providers -t llm_models -t llm_model_capabilities \
+--      -t llm_model_routing_settings \
+--      > migrations/catalog_only.sql

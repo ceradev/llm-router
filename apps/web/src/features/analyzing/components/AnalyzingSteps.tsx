@@ -84,13 +84,13 @@ export function AnalyzingSteps({
                 }
                 animate={{
                   opacity: visual.opacity,
-                  y: idx * 28,
+                  y: idx * 24,
                   filter: `blur(${visual.blurPx}px)`,
                 }}
                 exit={
                   reduce
                     ? { opacity: 0 }
-                    : { opacity: 0, y: idx * 28 + 12, filter: "blur(6px)" }
+                    : { opacity: 0, y: idx * 24 + 12, filter: "blur(6px)" }
                 }
                 transition={{
                   duration: reduce ? 0.01 : 0.32,
@@ -98,11 +98,11 @@ export function AnalyzingSteps({
                 }}
                 className="absolute left-0 right-0 mx-auto flex w-full max-w-xl items-center justify-center"
               >
-                <div className="inline-flex items-center justify-center gap-4">
+                <div className="inline-flex items-center justify-center gap-3 sm:gap-4">
                   <div className="flex h-6 w-6 items-center justify-center">
                     <StepIndicator state={item.state} reduce={reduce} />
                   </div>
-                  <div className="text-[1.55rem] leading-tight font-medium tracking-tight text-(--text-primary) md:text-[1.85rem]">
+                  <div className="text-[1.1rem] leading-tight font-medium tracking-tight text-(--text-primary) sm:text-[1.45rem] md:text-[1.85rem]">
                     {t(item.key)}
                   </div>
                 </div>
@@ -113,7 +113,7 @@ export function AnalyzingSteps({
       </ul>
 
       {/* Reserve height so the absolute items don't collapse the layout */}
-      <div className="h-[140px]" aria-hidden />
+      <div className="h-[118px] sm:h-[140px]" aria-hidden />
     </div>
   )
 }

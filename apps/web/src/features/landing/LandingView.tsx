@@ -72,11 +72,11 @@ export function LandingView({
       />
 
       <div className="mb-5 flex justify-center sm:mb-6">
-        <p className="flex max-w-176 flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-full border border-[#3B82F6]/25 bg-[#3B82F6]/10 px-6 py-2.5 text-center">
-          <span className="rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-[#93C5FD]">
+        <p className="flex max-w-176 flex-wrap items-center justify-center gap-x-2 gap-y-1.5 rounded-full border border-[#3B82F6]/25 bg-[#3B82F6]/10 px-4 py-2 text-center sm:gap-x-3 sm:gap-y-2 sm:px-6 sm:py-2.5">
+          <span className="hidden rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-[#93C5FD] sm:inline-flex">
             {t("heroAnnouncementComingSoon")}
           </span>
-          <span className="text-[12px] font-semibold leading-relaxed tracking-tight text-(--text-accent) sm:text-sm">
+          <span className="text-[11px] font-semibold leading-relaxed tracking-tight text-(--text-accent) sm:text-sm">
             {t("heroAnnouncementText")}
           </span>
         </p>
@@ -97,7 +97,7 @@ export function LandingView({
             <button
               type="button"
               onClick={() => setAdvancedOpen(true)}
-              className="rounded-xl px-5 py-3 text-sm font-medium text-(--text-muted) transition-colors hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle) sm:px-6 sm:py-3.5 sm:text-base"
+              className="min-h-11 rounded-xl cursor-pointer px-5 py-3 text-sm font-medium text-(--text-muted) transition-colors hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle) sm:px-6 sm:py-3.5 sm:text-base"
             >
               {t("advancedOptions")}
             </button>
@@ -115,7 +115,7 @@ export function LandingView({
                 opacity: { delay: 0.45, duration: 0.35 },
                 y: { delay: 0.45, duration: 0.35, ease: "easeOut" },
               }}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-(--border-subtle) bg-(--surface-glass) text-(--text-muted) shadow-(--shadow-card) transition hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-(--border-subtle) bg-(--surface-glass) text-(--text-muted) shadow-(--shadow-card) transition hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
             >
               <IconChevronDown className="h-5 w-5" />
             </motion.button>

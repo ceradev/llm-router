@@ -95,7 +95,7 @@ export function AdvancedOptionsModal({
     const useCaseOnClass =
         "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) text-(--text-primary) shadow-[0_0_14px_rgba(59,130,246,0.16)]";
     const useCaseOffClass =
-        "text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
+        "text-slate-800 dark:text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
     const providerTagClass =
         "border-[#3B82F6]/35 bg-[--surface-glass] dark:bg-(--surface-glass)";
     const providerListClass =
@@ -103,7 +103,7 @@ export function AdvancedOptionsModal({
     const providerRowOnClass =
         "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) text-(--text-primary)";
     const providerRowOffClass =
-        "text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
+        "text-slate-800 dark:text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
 
     if (!open) return null;
 
@@ -138,7 +138,7 @@ export function AdvancedOptionsModal({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.99, y: 8 }}
                 transition={dialogT}
-                className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-(--border-subtle) bg-[rgba(255,255,255,0.92)] dark:bg-[#0b1220] shadow-(--shadow-elevated)"
+                className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-(--border-subtle) bg-(--surface-glass) shadow-(--shadow-elevated) backdrop-blur-xl dark:border-[#3B82F6]/30 dark:bg-linear-to-br dark:from-[#3B82F6]/15 dark:via-(--surface-glass) dark:to-[#0EA5E9]/10"
                 onPointerDown={(e) => e.stopPropagation()}
             >
                 <header className="flex items-center justify-between gap-4 border-b border-(--border-subtle) px-5 py-4 sm:px-6 sm:py-5">
@@ -151,7 +151,7 @@ export function AdvancedOptionsModal({
                         ref={closeBtnRef}
                         type="button"
                         onClick={onClose}
-                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-(--border-subtle) bg-(--surface-glass) text-(--text-muted) transition-colors hover:bg-(--surface-glass-hover) hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-(--border-subtle) bg-(--surface-glass) text-(--text-muted) transition-colors hover:bg-(--surface-glass-hover) hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
                         aria-label={t("close")}
                     >
                         <span className="text-lg leading-none">×</span>
@@ -161,7 +161,7 @@ export function AdvancedOptionsModal({
                 <div className="max-h-[min(70vh,640px)] overflow-y-auto p-5 sm:p-6">
                     <div className="relative overflow-visible rounded-2xl p-5 sm:p-6">
                         <div className="relative space-y-6">
-                            <p className="text-sm leading-relaxed text-(--text-muted)">
+                            <p className="text-sm leading-relaxed text-slate-800 dark:text-(--text-muted)">
                                 {t("advancedOptionsIntro")}
                             </p>
                             <div>
@@ -170,7 +170,7 @@ export function AdvancedOptionsModal({
                                 </SectionLabel>
                                 <div
                                     className={cn(
-                                        "grid grid-cols-3 rounded-full border border-(--border-subtle) p-1",
+                                        "grid grid-cols-1 gap-1 rounded-2xl border border-(--border-subtle) p-1 sm:grid-cols-3 sm:gap-0 sm:rounded-full",
                                         segmentedBgClass,
                                     )}
                                     role="tablist"
@@ -184,10 +184,10 @@ export function AdvancedOptionsModal({
                                             aria-selected={priority === p}
                                             onClick={() => setPriority(p)}
                                             className={cn(
-                                                "relative rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors duration-200",
+                                                "relative min-h-11 rounded-xl px-4 py-2.5 text-sm font-medium capitalize transition-colors duration-200 sm:rounded-full sm:py-2",
                                                 priority === p
                                                     ? "text-(--text-primary)"
-                                                    : "text-(--text-muted) hover:opacity-80",
+                                                    : "text-slate-800 dark:text-(--text-muted) hover:opacity-80",
                                             )}
                                         >
                                             {priority === p ? (
@@ -212,7 +212,7 @@ export function AdvancedOptionsModal({
                                 </SectionLabel>
                                 <div
                                     className={cn(
-                                        "grid grid-cols-4 gap-1.5 rounded-xl border border-(--border-subtle) p-1.5",
+                                        "grid grid-cols-2 gap-1.5 rounded-xl border border-(--border-subtle) p-1.5 sm:grid-cols-3 lg:grid-cols-4",
                                         segmentedBgClass,
                                     )}
                                 >
@@ -224,7 +224,7 @@ export function AdvancedOptionsModal({
                                                 type="button"
                                                 onClick={() => toggleUseCase(id)}
                                                 className={cn(
-                                                    "rounded-lg px-3 py-2.5 text-center text-sm font-medium transition-all duration-200 sm:px-4",
+                                                    "min-h-11 rounded-lg px-3 py-2.5 text-center text-sm font-medium transition-all duration-200 sm:px-4",
                                                     on ? useCaseOnClass : useCaseOffClass,
                                                 )}
                                             >
@@ -265,14 +265,14 @@ export function AdvancedOptionsModal({
                                                     </span>
                                                 ))
                                             ) : (
-                                                <span className="px-2 text-sm text-(--text-muted)/90">
+                                                <span className="px-2 text-sm text-slate-800/90 dark:text-(--text-muted)/90">
                                                     {t("preferredProviders")}
                                                 </span>
                                             )}
                                         </div>
                                         <span
                                             className={cn(
-                                                "rounded-md p-2 text-(--text-muted) transition-colors hover:text-(--text-primary)",
+                                                "rounded-md p-2 text-slate-700 dark:text-(--text-muted) transition-colors hover:text-(--text-primary)",
                                                 "hover:bg-(--surface-glass-hover)",
                                             )}
                                         >
@@ -329,7 +329,7 @@ export function AdvancedOptionsModal({
                                 </SectionLabel>
                                 <div
                                     className={cn(
-                                        "grid grid-cols-3 rounded-full border border-(--border-subtle) p-1",
+                                        "grid grid-cols-1 gap-1 rounded-2xl border border-(--border-subtle) p-1 sm:grid-cols-3 sm:gap-0 sm:rounded-full",
                                         segmentedBgClass,
                                     )}
                                     role="tablist"
@@ -343,10 +343,10 @@ export function AdvancedOptionsModal({
                                             aria-selected={responseDepth === d}
                                             onClick={() => setResponseDepth(d)}
                                             className={cn(
-                                                "relative rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200",
+                                                "relative min-h-11 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 sm:rounded-full sm:py-2",
                                                 responseDepth === d
                                                     ? "text-(--text-primary)"
-                                                    : "text-(--text-muted) hover:opacity-80",
+                                                    : "text-slate-800 dark:text-(--text-muted) hover:opacity-80",
                                             )}
                                         >
                                             {responseDepth === d ? (
@@ -363,7 +363,7 @@ export function AdvancedOptionsModal({
                                         </button>
                                     ))}
                                 </div>
-                                <p className="mt-2.5 text-sm text-(--text-muted)">
+                                <p className="mt-2.5 text-sm text-slate-800 dark:text-(--text-muted)">
                                     {t("responseDepthHelper")}
                                 </p>
                             </div>
@@ -375,7 +375,7 @@ export function AdvancedOptionsModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-xl px-5 py-3 text-sm font-medium text-(--text-muted) transition-colors hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
+                        className="rounded-xl px-5 py-3 text-sm font-medium text-slate-800 dark:text-(--text-muted) transition-colors hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
                     >
                         {t("close")}
                     </button>

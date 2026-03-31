@@ -101,6 +101,4 @@ def compute_technical_capabilities(model: ModelProfile) -> list[str]:
 
 def compute_verification_scopes(model: ModelProfile) -> list[str]:
     scopes = {scope.value for scope in model.verification_scopes}
-    if not scopes:
-        scopes.add(BenchmarkScope.TEXT.value)
     return sorted(scopes)

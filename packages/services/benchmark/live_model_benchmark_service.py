@@ -32,6 +32,16 @@ from packages.infrastructure.providers.openrouter_client import ChatCompletionRe
 from packages.services.benchmark.model_benchmark_service import is_active_text_to_text_evaluation_scope
 
 CURRENT_LIVE_VERSION = "benchmark-live-v1"
+_ONE_PIXEL_RED_PNG_DATA_URI = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X0wAAAABJRU5ErkJggg=="
+)
+_TEXT_FILE_DATA_URI = "data:text/plain;base64,SGVsbG8gZnJvbSBmaWxlIHRlc3QK"
+_CSV_FILE_DATA_URI = "data:text/csv;base64,bmFtZSx2YWx1ZQphbHBoYSwxMgo="
+_DETAIL_PARSE_ERROR = "parse error"
+_DETAIL_STRICT_MISMATCH = "strict value mismatch"
+_DETAIL_MISSING_KEYS = "missing required keys"
+_DETAIL_NON_CHAT_MODEL = "not a chat model"
 
 _MIN_TOOL_SCHEMA: list[dict[str, Any]] = [
     {
@@ -63,6 +73,19 @@ class BenchmarkCompletionClient(Protocol):
         response_format: dict[str, Any] | None,
         tools: list[dict[str, Any]] | None,
         tool_choice: str | object | None,
+    ) -> ChatCompletionResult:
+        ...
+
+
+@runtime_checkable
+class BenchmarkLegacyCompletionClient(Protocol):
+    def completion(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
     ) -> ChatCompletionResult:
         ...
 
@@ -148,105 +171,81 @@ class LiveModelBenchmarkService:
             api_key=settings.openrouter_api_key,
         )
 
-    def run_live_benchmark_for_model(self, *, model_id: int) -> LiveBenchmarkOutcome:
+    def run_live_benchmark_for_model(
+        self,
+        *,
+        model_id: int,
+        enable_image_text_v2: bool = False,
+        strict_image_text_checks: bool = True,
+        enable_file_text_v3: bool = False,
+        strict_file_text_checks: bool = True,
+    ) -> LiveBenchmarkOutcome:
         model = self._session.get(LLMModel, model_id)
         if model is None:
             raise ValueError(f"model id {model_id} not found")
 
-        if model.evaluation_status == ModelEvaluationStatus.DEPRECATED:
-            return self._skipped_outcome(
-                model_id=model_id,
-                model=model,
-                summary="Live benchmark skipped: deprecated.",
-                raw={"reason": "deprecated"},
-            )
+        scope, skipped = self._resolve_scope_or_skip(
+            model=model,
+            model_id=model_id,
+            enable_image_text_v2=enable_image_text_v2,
+            enable_file_text_v3=enable_file_text_v3,
+        )
+        if skipped is not None:
+            return skipped
 
-        if model.evaluation_status == ModelEvaluationStatus.CATALOGED:
-            raise ValueError(
-                "Run heuristic screening first; live benchmark requires at least `provisional` "
-                "(or re-try from `rejected`)."
-            )
-
-        if not is_active_text_to_text_evaluation_scope(model):
-            return self._skipped_outcome(
-                model_id=model_id,
-                model=model,
-                summary="Live benchmark skipped: multimodal / out of text→text scope.",
-                raw={"reason": "unsupported_modality"},
-            )
-
+        assert scope is not None
         api_model = openrouter_api_model_id(model)
         if not api_model:
             raise ValueError("Cannot resolve OpenRouter model id for benchmark")
 
         client = self._get_client()
-        cases: list[_CaseResult] = []
-
-        cases.append(self._case_general(client=client, api_model=api_model, model=model))
-        if model.supports_json:
-            cases.append(self._case_json(client=client, api_model=api_model, model=model))
-        if model.supports_tools:
-            cases.append(self._case_tools(client=client, api_model=api_model, model=model))
-
-        failed = [c for c in cases if not c.ok]
-        error_rate = len(failed) / len(cases) if cases else 1.0
-        passed = len(failed) == 0 and len(cases) > 0
-
-        latencies = [float(c.latency_ms) for c in cases if c.latency_ms > 0]
-        avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
-        latency_score = _latency_score_from_ms(avg_lat)
-
-        costs = [c.cost_usd for c in cases]
-        avg_cost = sum(costs) / len(costs) if costs else 0.0
-        cost_score = compute_cost_score(avg_cost)
-
-        json_ok = all(c.ok for c in cases if c.case_id == "json_structured") or not model.supports_json
-        tool_ok = all(c.ok for c in cases if c.case_id == "tool_call") or not model.supports_tools
-        json_reliability = 1.0 if json_ok else 0.2
-        tool_reliability = 1.0 if tool_ok else 0.2
-
-        quality_score = 5 if passed else max(1, 5 - 2 * len(failed))
-
-        aggregate = LiveAggregate(
-            quality_score=min(5, quality_score),
-            latency_score=latency_score,
-            cost_score=cost_score,
-            json_reliability=json_reliability,
-            tool_reliability=tool_reliability,
-            error_rate=error_rate,
-            sample_size=len(cases),
-            case_results=cases,
+        cases = self._build_live_cases(
+            client=client,
+            api_model=api_model,
+            model=model,
+            scope=scope,
+            strict_image_text_checks=strict_image_text_checks,
+            strict_file_text_checks=strict_file_text_checks,
         )
-
-        raw: dict[str, Any] = {
-            "evaluation_version": CURRENT_LIVE_VERSION,
-            "benchmark_kind": BenchmarkKind.LIVE.value,
-            "benchmark_scope": BenchmarkScope.TEXT.value,
-            "openrouter_model": api_model,
-            "cases": [
-                {
-                    "id": c.case_id,
-                    "ok": c.ok,
-                    "detail": c.detail,
-                    "latency_ms": c.latency_ms,
-                    "input_tokens": c.input_tokens,
-                    "output_tokens": c.output_tokens,
-                    "cost_usd": c.cost_usd,
-                }
-                for c in cases
-            ],
-            "passed": passed,
-        }
-
-        bench_status = BenchmarkRunStatus.COMPLETED if passed else BenchmarkRunStatus.FAILED
-        summary = (
-            "Live benchmark passed; model is execution-verified."
-            if passed
-            else "Live benchmark failed one or more cases."
+        if self._has_non_chat_model_failure(cases):
+            completion_probe = self._run_legacy_completion_probe(client=client, api_model=api_model, model=model)
+            return self._skipped_outcome(
+                model_id=model_id,
+                model=model,
+                benchmark_scope=scope,
+                summary="Live benchmark skipped: model does not support chat/completions endpoint.",
+                raw={
+                    "reason": "unsupported_chat_endpoint",
+                    "api_model": api_model,
+                    "completion_probe": completion_probe,
+                    "cases": [
+                        {
+                            "id": c.case_id,
+                            "ok": c.ok,
+                            "detail": c.detail,
+                            "latency_ms": c.latency_ms,
+                            "input_tokens": c.input_tokens,
+                            "output_tokens": c.output_tokens,
+                            "cost_usd": c.cost_usd,
+                        }
+                        for c in cases
+                    ],
+                },
+            )
+        aggregate, passed = self._build_live_aggregate(cases=cases, model=model)
+        raw = self._build_live_raw(
+            cases=cases,
+            scope=scope,
+            api_model=api_model,
+            strict_image_text_checks=strict_image_text_checks,
+            strict_file_text_checks=strict_file_text_checks,
+            passed=passed,
         )
+        bench_status, summary = self._build_status_summary(passed=passed)
 
         row = self._persist_live_run(
             model_id=model_id,
+            benchmark_scope=scope,
             status=bench_status,
             aggregate=aggregate,
             summary=summary,
@@ -269,11 +268,201 @@ class LiveModelBenchmarkService:
             evaluation_status_after=model.evaluation_status,
         )
 
+    @staticmethod
+    def _has_non_chat_model_failure(cases: list[_CaseResult]) -> bool:
+        for case in cases:
+            if case.case_id != "general_text":
+                continue
+            detail = case.detail.lower()
+            if _DETAIL_NON_CHAT_MODEL in detail and "v1/completions" in detail:
+                return True
+        return False
+
+    def _run_legacy_completion_probe(
+        self,
+        *,
+        client: BenchmarkCompletionClient,
+        api_model: str,
+        model: LLMModel,
+    ) -> dict[str, Any] | None:
+        if not isinstance(client, BenchmarkLegacyCompletionClient):
+            return None
+        try:
+            r = client.completion(
+                model=api_model,
+                prompt="Reply with exactly the token: PONG",
+                max_tokens=32,
+                temperature=0.0,
+            )
+        except OpenRouterClientError as exc:
+            return {"ok": False, "detail": str(exc)}
+
+        ok = "PONG" in r.content.upper().replace(" ", "")
+        return {
+            "ok": ok,
+            "detail": "ok" if ok else "expected PONG in completion response",
+            "latency_ms": r.latency_ms,
+            "input_tokens": r.input_tokens,
+            "output_tokens": r.output_tokens,
+            "cost_usd": _estimate_cost_usd(model=model, inp=r.input_tokens, out=r.output_tokens),
+        }
+
+    def _resolve_scope_or_skip(
+        self,
+        *,
+        model: LLMModel,
+        model_id: int,
+        enable_image_text_v2: bool,
+        enable_file_text_v3: bool,
+    ) -> tuple[BenchmarkScope | None, LiveBenchmarkOutcome | None]:
+        if model.evaluation_status == ModelEvaluationStatus.DEPRECATED:
+            return None, self._skipped_outcome(
+                model_id=model_id,
+                model=model,
+                benchmark_scope=BenchmarkScope.TEXT,
+                summary="Live benchmark skipped: deprecated.",
+                raw={"reason": "deprecated"},
+            )
+        if model.evaluation_status == ModelEvaluationStatus.CATALOGED:
+            raise ValueError(
+                "Run heuristic screening first; live benchmark requires at least `provisional` "
+                "(or re-try from `rejected`)."
+            )
+
+        scope = self._resolve_live_scope(
+            model,
+            enable_image_text_v2=enable_image_text_v2,
+            enable_file_text_v3=enable_file_text_v3,
+        )
+        if scope is None:
+            return None, self._skipped_outcome(
+                model_id=model_id,
+                model=model,
+                benchmark_scope=BenchmarkScope.TEXT,
+                summary="Live benchmark skipped: multimodal / out of text→text scope.",
+                raw={"reason": "unsupported_modality"},
+            )
+        return scope, None
+
+    def _build_live_cases(
+        self,
+        *,
+        client: BenchmarkCompletionClient,
+        api_model: str,
+        model: LLMModel,
+        scope: BenchmarkScope,
+        strict_image_text_checks: bool,
+        strict_file_text_checks: bool,
+    ) -> list[_CaseResult]:
+        cases = [self._case_general(client=client, api_model=api_model, model=model)]
+        if scope == BenchmarkScope.IMAGE_TO_TEXT:
+            cases.append(
+                self._case_image_to_text_strict(
+                    client=client,
+                    api_model=api_model,
+                    model=model,
+                    strict=strict_image_text_checks,
+                )
+            )
+        if scope == BenchmarkScope.FILE_TO_TEXT:
+            cases.append(
+                self._case_file_to_text_txt(
+                    client=client,
+                    api_model=api_model,
+                    model=model,
+                    strict=strict_file_text_checks,
+                )
+            )
+            cases.append(
+                self._case_file_to_text_csv(
+                    client=client,
+                    api_model=api_model,
+                    model=model,
+                    strict=strict_file_text_checks,
+                )
+            )
+        if model.supports_json:
+            cases.append(self._case_json(client=client, api_model=api_model, model=model))
+        if model.supports_tools:
+            cases.append(self._case_tools(client=client, api_model=api_model, model=model))
+        return cases
+
+    def _build_live_aggregate(
+        self,
+        *,
+        cases: list[_CaseResult],
+        model: LLMModel,
+    ) -> tuple[LiveAggregate, bool]:
+        failed = [c for c in cases if not c.ok]
+        passed = len(failed) == 0 and len(cases) > 0
+        error_rate = len(failed) / len(cases) if cases else 1.0
+
+        latencies = [float(c.latency_ms) for c in cases if c.latency_ms > 0]
+        avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
+        latency_score = _latency_score_from_ms(avg_lat)
+
+        costs = [c.cost_usd for c in cases]
+        avg_cost = sum(costs) / len(costs) if costs else 0.0
+        cost_score = compute_cost_score(avg_cost)
+
+        json_ok = all(c.ok for c in cases if c.case_id == "json_structured") or not model.supports_json
+        tool_ok = all(c.ok for c in cases if c.case_id == "tool_call") or not model.supports_tools
+        quality_score = 5 if passed else max(1, 5 - 2 * len(failed))
+        aggregate = LiveAggregate(
+            quality_score=min(5, quality_score),
+            latency_score=latency_score,
+            cost_score=cost_score,
+            json_reliability=1.0 if json_ok else 0.2,
+            tool_reliability=1.0 if tool_ok else 0.2,
+            error_rate=error_rate,
+            sample_size=len(cases),
+            case_results=cases,
+        )
+        return aggregate, passed
+
+    def _build_live_raw(
+        self,
+        *,
+        cases: list[_CaseResult],
+        scope: BenchmarkScope,
+        api_model: str,
+        strict_image_text_checks: bool,
+        strict_file_text_checks: bool,
+        passed: bool,
+    ) -> dict[str, Any]:
+        return {
+            "evaluation_version": CURRENT_LIVE_VERSION,
+            "benchmark_kind": BenchmarkKind.LIVE.value,
+            "benchmark_scope": scope.value,
+            "strict_image_text_checks": strict_image_text_checks,
+            "strict_file_text_checks": strict_file_text_checks,
+            "openrouter_model": api_model,
+            "cases": [
+                {
+                    "id": c.case_id,
+                    "ok": c.ok,
+                    "detail": c.detail,
+                    "latency_ms": c.latency_ms,
+                    "input_tokens": c.input_tokens,
+                    "output_tokens": c.output_tokens,
+                    "cost_usd": c.cost_usd,
+                }
+                for c in cases
+            ],
+            "passed": passed,
+        }
+
+    def _build_status_summary(self, *, passed: bool) -> tuple[BenchmarkRunStatus, str]:
+        if passed:
+            return BenchmarkRunStatus.COMPLETED, "Live benchmark passed; model is execution-verified."
+        return BenchmarkRunStatus.FAILED, "Live benchmark failed one or more cases."
+
     def _skipped_outcome(
         self,
         *,
         model_id: int,
         model: LLMModel,
+        benchmark_scope: BenchmarkScope,
         summary: str,
         raw: dict[str, Any],
     ) -> LiveBenchmarkOutcome:
@@ -281,7 +470,7 @@ class LiveModelBenchmarkService:
             model_id=model_id,
             evaluation_version=CURRENT_LIVE_VERSION,
             benchmark_kind=BenchmarkKind.LIVE.value,
-            benchmark_scope=BenchmarkScope.TEXT.value,
+            benchmark_scope=benchmark_scope.value,
             status=BenchmarkRunStatus.SKIPPED_UNSUPPORTED.value,
             quality_score=0,
             latency_score=0,
@@ -301,6 +490,25 @@ class LiveModelBenchmarkService:
             passed=False,
             evaluation_status_after=model.evaluation_status,
         )
+
+    def _resolve_live_scope(
+        self,
+        model: LLMModel,
+        *,
+        enable_image_text_v2: bool,
+        enable_file_text_v3: bool,
+    ) -> BenchmarkScope | None:
+        ins = {str(x).lower() for x in (model.input_modalities or ["text"])}
+        outs = {str(x).lower() for x in (model.output_modalities or ["text"])}
+        if "text" not in outs:
+            return None
+        if enable_image_text_v2 and "image" in ins:
+            return BenchmarkScope.IMAGE_TO_TEXT
+        if enable_file_text_v3 and "file" in ins:
+            return BenchmarkScope.FILE_TO_TEXT
+        if is_active_text_to_text_evaluation_scope(model):
+            return BenchmarkScope.TEXT
+        return None
 
     def _case_general(
         self,
@@ -363,7 +571,7 @@ class LiveModelBenchmarkService:
             return _CaseResult(case_id="json_structured", ok=False, detail=str(exc))
 
         ok = False
-        detail = "parse error"
+        detail = _DETAIL_PARSE_ERROR
         try:
             text = r.content.strip()
             data = json.loads(text)
@@ -424,10 +632,199 @@ class LiveModelBenchmarkService:
             cost_usd=cost,
         )
 
+    def _case_image_to_text_strict(
+        self,
+        *,
+        client: BenchmarkCompletionClient,
+        api_model: str,
+        model: LLMModel,
+        strict: bool,
+    ) -> _CaseResult:
+        response_format = {"type": "json_object"} if model.supports_json else None
+        prompt = (
+            "Analyze the attached image and return ONLY valid JSON (no markdown) with exact keys "
+            "'label' and 'dominant_color'. Expected values for this test image are "
+            "label='red_square' and dominant_color='red'."
+        )
+        try:
+            r = client.chat_completion(
+                model=api_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": _ONE_PIXEL_RED_PNG_DATA_URI}},
+                        ],
+                    }
+                ],
+                max_tokens=128,
+                temperature=0.0,
+                response_format=response_format,
+                tools=None,
+                tool_choice=None,
+            )
+        except OpenRouterClientError as exc:
+            return _CaseResult(case_id="image_to_text_strict", ok=False, detail=str(exc))
+
+        ok = False
+        detail = _DETAIL_PARSE_ERROR
+        try:
+            parsed = json.loads(r.content.strip())
+            if isinstance(parsed, dict):
+                if strict:
+                    ok = parsed.get("label") == "red_square" and parsed.get("dominant_color") == "red"
+                    detail = "ok" if ok else _DETAIL_STRICT_MISMATCH
+                else:
+                    ok = "label" in parsed and "dominant_color" in parsed
+                    detail = "ok" if ok else _DETAIL_MISSING_KEYS
+        except json.JSONDecodeError as exc:
+            detail = f"json: {exc}"
+
+        cost = _estimate_cost_usd(model=model, inp=r.input_tokens, out=r.output_tokens)
+        return _CaseResult(
+            case_id="image_to_text_strict",
+            ok=ok,
+            detail=detail,
+            latency_ms=r.latency_ms,
+            input_tokens=r.input_tokens,
+            output_tokens=r.output_tokens,
+            cost_usd=cost,
+        )
+
+    def _case_file_to_text_txt(
+        self,
+        *,
+        client: BenchmarkCompletionClient,
+        api_model: str,
+        model: LLMModel,
+        strict: bool,
+    ) -> _CaseResult:
+        response_format = {"type": "json_object"} if model.supports_json else None
+        prompt = (
+            "Read the attached text file and return ONLY valid JSON (no markdown) with keys "
+            "'source_type' and 'contains_hello'. Expected source_type='txt' and contains_hello=true."
+        )
+        try:
+            r = client.chat_completion(
+                model=api_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "file",
+                                "file": {
+                                    "filename": "sample.txt",
+                                    "file_data": _TEXT_FILE_DATA_URI,
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=128,
+                temperature=0.0,
+                response_format=response_format,
+                tools=None,
+                tool_choice=None,
+            )
+        except OpenRouterClientError as exc:
+            return _CaseResult(case_id="file_to_text_txt", ok=False, detail=str(exc))
+
+        ok = False
+        detail = _DETAIL_PARSE_ERROR
+        try:
+            parsed = json.loads(r.content.strip())
+            if isinstance(parsed, dict):
+                if strict:
+                    ok = parsed.get("source_type") == "txt" and parsed.get("contains_hello") is True
+                    detail = "ok" if ok else _DETAIL_STRICT_MISMATCH
+                else:
+                    ok = "source_type" in parsed and "contains_hello" in parsed
+                    detail = "ok" if ok else _DETAIL_MISSING_KEYS
+        except json.JSONDecodeError as exc:
+            detail = f"json: {exc}"
+        cost = _estimate_cost_usd(model=model, inp=r.input_tokens, out=r.output_tokens)
+        return _CaseResult(
+            case_id="file_to_text_txt",
+            ok=ok,
+            detail=detail,
+            latency_ms=r.latency_ms,
+            input_tokens=r.input_tokens,
+            output_tokens=r.output_tokens,
+            cost_usd=cost,
+        )
+
+    def _case_file_to_text_csv(
+        self,
+        *,
+        client: BenchmarkCompletionClient,
+        api_model: str,
+        model: LLMModel,
+        strict: bool,
+    ) -> _CaseResult:
+        response_format = {"type": "json_object"} if model.supports_json else None
+        prompt = (
+            "Read the attached csv file and return ONLY valid JSON (no markdown) with keys "
+            "'source_type' and 'row_count'. Expected source_type='csv' and row_count=1."
+        )
+        try:
+            r = client.chat_completion(
+                model=api_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "file",
+                                "file": {
+                                    "filename": "sample.csv",
+                                    "file_data": _CSV_FILE_DATA_URI,
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=128,
+                temperature=0.0,
+                response_format=response_format,
+                tools=None,
+                tool_choice=None,
+            )
+        except OpenRouterClientError as exc:
+            return _CaseResult(case_id="file_to_text_csv", ok=False, detail=str(exc))
+
+        ok = False
+        detail = _DETAIL_PARSE_ERROR
+        try:
+            parsed = json.loads(r.content.strip())
+            if isinstance(parsed, dict):
+                if strict:
+                    ok = parsed.get("source_type") == "csv" and parsed.get("row_count") == 1
+                    detail = "ok" if ok else _DETAIL_STRICT_MISMATCH
+                else:
+                    ok = "source_type" in parsed and "row_count" in parsed
+                    detail = "ok" if ok else _DETAIL_MISSING_KEYS
+        except json.JSONDecodeError as exc:
+            detail = f"json: {exc}"
+        cost = _estimate_cost_usd(model=model, inp=r.input_tokens, out=r.output_tokens)
+        return _CaseResult(
+            case_id="file_to_text_csv",
+            ok=ok,
+            detail=detail,
+            latency_ms=r.latency_ms,
+            input_tokens=r.input_tokens,
+            output_tokens=r.output_tokens,
+            cost_usd=cost,
+        )
+
     def _persist_live_run(
         self,
         *,
         model_id: int,
+        benchmark_scope: BenchmarkScope,
         status: BenchmarkRunStatus,
         aggregate: LiveAggregate,
         summary: str,
@@ -437,7 +834,7 @@ class LiveModelBenchmarkService:
             model_id=model_id,
             evaluation_version=CURRENT_LIVE_VERSION,
             benchmark_kind=BenchmarkKind.LIVE.value,
-            benchmark_scope=BenchmarkScope.TEXT.value,
+            benchmark_scope=benchmark_scope.value,
             status=status.value,
             quality_score=aggregate.quality_score,
             latency_score=aggregate.latency_score,

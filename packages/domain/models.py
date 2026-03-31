@@ -34,6 +34,8 @@ class BenchmarkScope(str, Enum):
     JSON_TOOLS = "json_tools"
     VISION = "vision"
     OCR = "ocr"
+    IMAGE_TO_TEXT = "image_to_text"
+    FILE_TO_TEXT = "file_to_text"
 
 
 class Capability(str, Enum):
@@ -57,7 +59,7 @@ class ModelProfile:
     capabilities: set[Capability] = field(default_factory=set)
     model_categories: set[ModelCategory] = field(default_factory=set)
     technical_capabilities: set[TechnicalCapability] = field(default_factory=set)
-    verification_scopes: set[BenchmarkScope] = field(default_factory=lambda: {BenchmarkScope.TEXT})
+    verification_scopes: set[BenchmarkScope] = field(default_factory=set)
     supports_tools: bool = False
     context_window: int | None = None
     max_output_tokens: int | None = None
@@ -68,6 +70,8 @@ class ModelProfile:
     supports_vision: bool = False
     input_modalities: tuple[str, ...] = ()
     output_modalities: tuple[str, ...] = ()
+    prompt_price: float | None = None
+    completion_price: float | None = None
 
     @property
     def supports_json(self) -> bool:

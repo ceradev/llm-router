@@ -37,6 +37,8 @@ class BenchmarkScope(str, Enum):
     JSON_TOOLS = "json_tools"
     VISION = "vision"
     OCR = "ocr"
+    IMAGE_TO_TEXT = "image_to_text"
+    FILE_TO_TEXT = "file_to_text"
 
 
 class ModelBenchmarkRun(Base, table=True):
