@@ -27,6 +27,12 @@ from packages.schemas.ranking_public_fields import (
 )
 
 
+def _to_cost_per_million(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return value * 1_000_000
+
+
 def to_attempt_response(attempt: InvocationAttempt) -> InvocationAttemptResponse:
     return InvocationAttemptResponse(
         provider=attempt.provider,
@@ -49,6 +55,7 @@ def scored_candidate_to_ranked_response(candidate: ScoredCandidate) -> RankedMod
         latency_score=candidate.latency_score,
         cost_score=candidate.cost_score,
         final_score=candidate.final_score,
+        model_score_adjustment=candidate.model_score_adjustment,
         explanation=candidate.explanation,
         pros=list(candidate.pros) if candidate.pros else None,
         cons=list(candidate.cons) if candidate.cons else None,
@@ -69,6 +76,10 @@ def scored_candidate_to_ranked_response(candidate: ScoredCandidate) -> RankedMod
         model_type_labels=compute_model_type_labels(candidate.model),
         is_verified=verified_flag,
         public_status_key=public_status_key,
+        user_rating=candidate.user_rating,
+        user_rating_count=candidate.user_rating_count,
+        cost_per_million_input=_to_cost_per_million(candidate.model.prompt_price),
+        cost_per_million_output=_to_cost_per_million(candidate.model.completion_price),
     )
 
 
@@ -97,10 +108,7 @@ def ranking_summary_to_response(summary: RankingSummary) -> RankingSummaryRespon
 
 
 def _gateway_explanation(*, routing_reason: str, intent: Intent, priority: Priority) -> str:
-    return (
-        f"{routing_reason} Intent: {intent.value.replace('_', ' ')}. "
-        f"Priority: {priority.value.replace('_', ' ')}."
-    )
+    return routing_reason
 
 
 def to_gateway_response(

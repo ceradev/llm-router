@@ -32,6 +32,12 @@ function scoreToPercent(score: number): number {
   return Math.round((score / 5) * 100)
 }
 
+function finalScoreToTen(score: number): number {
+  if (!Number.isFinite(score)) return 1
+  const clamped = Math.max(1, Math.min(10, score))
+  return Math.round(clamped * 10) / 10
+}
+
 /** Map catalog context size to chart bar 0–100 when we have token counts. */
 function contextTokensToChartScore(tokens: number | null | undefined): number {
   if (tokens == null || !Number.isFinite(tokens) || tokens <= 0) return 50
@@ -73,7 +79,7 @@ function toModelDecision(
     modelId: rankItem.model_id,
     name: formatModelName(rankItem.model_id),
     provider: formatProvider(rankItem.model_id),
-    score: scoreToPercent(rankItem.final_score),
+    score: finalScoreToTen(rankItem.final_score),
     latencyMs:
       options.measuredLatencyMs != null && options.measuredLatencyMs >= 0
         ? options.measuredLatencyMs
@@ -94,6 +100,7 @@ function toModelDecision(
     rankingReasonKey: options.rankingReasonKey,
     sameAsBestOverall: options.sameAsBestOverall,
     rankingExplanation: rankItem.explanation,
+    modelScoreAdjustment: rankItem.model_score_adjustment ?? 0,
     modelCategories: rankItem.model_categories ?? [],
     technicalCapabilities: rankItem.technical_capabilities ?? [],
     verificationScopes: rankItem.verification_scopes ?? [],
@@ -109,6 +116,10 @@ function toModelDecision(
     modelTypeLabels: rankItem.model_type_labels ?? [],
     isVerified: rankItem.is_verified ?? false,
     publicStatusKey: rankItem.public_status_key ?? null,
+    userRating: rankItem.user_rating ?? undefined,
+    userRatingCount: rankItem.user_rating_count ?? undefined,
+    costPerMillionInput: rankItem.cost_per_million_input ?? undefined,
+    costPerMillionOutput: rankItem.cost_per_million_output ?? undefined,
   }
 }
 
@@ -170,6 +181,7 @@ function featuredModelIds(summary: GatewayBackendResponse["ranking_summary"]): S
 
 function buildRoutingInfo(data: GatewayBackendResponse): ResultsRoutingInfo {
   return {
+    requestId: data.request_id,
     intent: data.intent,
     priority: data.priority,
     explanation: data.explanation,

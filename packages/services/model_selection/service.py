@@ -10,6 +10,7 @@ from packages.domain.gateway import (
     ScoredCandidate,
 )
 from packages.domain.models import ModelProfile
+from packages.infrastructure.db.repositories.feedback_repository import FeedbackRepository
 from packages.infrastructure.db.repositories.model_repository import ModelRepository, ModelRoutingRow
 from packages.services.prompt_evaluation.types import PromptEvaluationResult
 
@@ -116,7 +117,12 @@ class ModelSelector:
         evaluation: PromptEvaluationResult,
     ) -> tuple[list[ModelProfile], tuple[ScoredCandidate, ...], dict[str, ScoreBreakdown]]:
         scored: list[tuple[float, ModelProfile, ModelRoutingRow, ScoreBreakdown]] = []
+        model_ids = [row.db_model_id for row in rows]
+        feedback_stats = FeedbackRepository(self.model_repository.session).get_feedback_stats_by_model_ids(
+            model_ids=model_ids
+        )
         for row in rows:
+            avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
             breakdown = compute_model_score(
                 model=row.model,
                 priority=priority,
@@ -127,6 +133,8 @@ class ModelSelector:
                 requires_tools=evaluation.requires_tools,
                 use_cases=task.use_cases,
                 preferred_providers=task.preferred_providers,
+                avg_rating=avg_rating,
+                ratings_count=ratings_count,
             )
             scored.append((breakdown.total, row.model, row, breakdown))
 
@@ -136,6 +144,7 @@ class ModelSelector:
 
         scored_candidates: list[ScoredCandidate] = []
         for rank, (_, model, row, breakdown) in enumerate(scored, start=1):
+            avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
             pros, cons = _pros_cons_for(model=model, priority=priority)
             scored_candidates.append(
                 ScoredCandidate(
@@ -147,9 +156,12 @@ class ModelSelector:
                     latency_score=float(model.latency_score),
                     cost_score=float(model.cost_score),
                     final_score=breakdown.total,
+                    model_score_adjustment=breakdown.model_score_adjustment,
                     explanation=breakdown.explanation,
                     pros=pros,
                     cons=cons,
+                    user_rating=avg_rating,
+                    user_rating_count=ratings_count,
                 )
             )
 
@@ -174,14 +186,23 @@ class ModelSelector:
         score_breakdowns: dict[str, ScoreBreakdown],
     ) -> str:
         short_name = primary_model.split("/")[-1].replace("-", " ").title()
-        intent_str = intent.value.replace("_", " ").title()
-        priority_str = priority.value.replace("_", " ").title()
+        intent_label = {
+            Intent.CODE: "coding",
+            Intent.ANALYSIS: "analysis",
+            Intent.CREATIVE: "creative",
+            Intent.GENERAL: "general",
+        }.get(intent, "general")
+        priority_label = {
+            Priority.HIGH_QUALITY: "best quality",
+            Priority.LOW_LATENCY: "fast response",
+            Priority.LOW_COST: "lower cost",
+            Priority.BALANCED: "balanced quality and speed",
+        }.get(priority, "balanced quality and speed")
 
-        reason = f"Selected '{short_name}' for {intent_str.lower()} task with {priority_str.lower()} priority"
-        
-        if ranked:
-            bd = score_breakdowns.get(primary_model)
-            if bd and bd.total > 0:
-                reason += f". Best overall score: {bd.total:.2f}"
-
+        reason = (
+            f"We picked {short_name} because it is a strong match for {intent_label} tasks "
+            f"and your preference for {priority_label}."
+        )
+        if ranked and score_breakdowns.get(primary_model) is not None:
+            reason += " It ranked highest among the currently available options."
         return reason

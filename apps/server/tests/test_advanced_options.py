@@ -19,6 +19,7 @@ from packages.domain.gateway import (
     RankingHighlight,
     RankingSummary,
     RoutingDecision,
+    ScoredCandidate,
 )
 from packages.domain.models import Capability, ModelProfile
 
@@ -35,6 +36,8 @@ def gateway_client_mock_orch() -> Generator[tuple[TestClient, MagicMock], None, 
         cost_score=4,
         default_temperature=0.3,
         capabilities={Capability.GENERAL},
+        prompt_price=0.0000005,
+        completion_price=0.0000015,
     )
     _h = RankingHighlight(
         model_id="anthropic/claude-test",
@@ -57,7 +60,22 @@ def gateway_client_mock_orch() -> Generator[tuple[TestClient, MagicMock], None, 
             reason="test",
             applied_temperature=0.5,
             candidates=[profile],
-            scored_candidates=(),
+            scored_candidates=(
+                ScoredCandidate(
+                    model=profile,
+                    priority_weight=100,
+                    db_model_id=1,
+                    rank=1,
+                    quality_score=4.0,
+                    latency_score=4.0,
+                    cost_score=4.0,
+                    final_score=4.2,
+                    model_score_adjustment=0.2,
+                    explanation="score=4.2",
+                    pros=(),
+                    cons=(),
+                ),
+            ),
         ),
         attempts=[],
         fallback_used=False,
@@ -100,3 +118,8 @@ def test_advanced_completion_passes_options_and_returns_200(
     assert task.use_cases == ["api", "ide"]
     assert task.preferred_providers == ["anthropic"]
     assert task.response_depth == "detailed"
+    body = r.json()
+    assert body["ranking"]
+    assert "model_score_adjustment" in body["ranking"][0]
+    assert body["ranking"][0]["cost_per_million_input"] == pytest.approx(0.5)
+    assert body["ranking"][0]["cost_per_million_output"] == pytest.approx(1.5)
