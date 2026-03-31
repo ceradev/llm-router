@@ -22,27 +22,28 @@
   :root {
     --bg-base: #f1f5f9;
     --text-primary: #0f172a;
-    --text-muted: #64748b;
-    --border-subtle: rgba(15, 23, 42, 0.12);
-    --surface-glass: rgba(15, 23, 42, 0.06);
-    --surface-glass-hover: rgba(15, 23, 42, 0.1);
-    /* Acentos (etiquetas, enlaces, violetas) */
+    --text-muted: #334155;
+    --border-subtle: rgba(15, 23, 42, 0.3);
+    --surface-glass: rgba(15, 23, 42, 0.1);
+    --surface-glass-hover: rgba(15, 23, 42, 0.16);
+    /* Acentos (etiquetas, enlaces) */
     --text-accent: #2563eb;
-    --text-accent-secondary: #5b21b6;
-    --text-accent-tertiary: #6d28d9;
+    --text-accent-secondary: #1d4ed8;
+    --text-accent-tertiary: #0ea5e9;
     /* Título hero en gradiente */
-    --headline-from: #64748b;
+    --headline-from: #475569;
     --headline-via: #0f172a;
-    --headline-to: #64748b;
+    --headline-to: #475569;
     --scrim: rgba(15, 23, 42, 0.45);
+    --shadow-card: 0 10px 28px rgba(15, 23, 42, 0.04);
     --shadow-elevated: 0 24px 80px rgba(15, 23, 42, 0.1);
     --shadow-navbar: 0 8px 40px rgba(15, 23, 42, 0.08);
     --shadow-drawer: -12px 0 48px rgba(15, 23, 42, 0.12);
-    --badge-bg: rgba(15, 23, 42, 0.07);
-    --segment-bg: rgba(15, 23, 42, 0.06);
+    --badge-bg: rgba(15, 23, 42, 0.1);
+    --segment-bg: rgba(15, 23, 42, 0.08);
     --inset-highlight: rgba(15, 23, 42, 0.04);
     --ring-focus: rgba(59, 130, 246, 0.55);
-    --ring-subtle: rgba(15, 23, 42, 0.2);
+    --ring-subtle: rgba(15, 23, 42, 0.3);
     --shadow-prompt:
       14px 0 34px -18px rgba(59, 130, 246, 0.26), -14px 0 34px -18px rgba(59, 130, 246, 0.26),
       0 0 20px rgba(59, 130, 246, 0.2), 0 0 56px -12px rgba(59, 130, 246, 0.28),
@@ -60,12 +61,13 @@
     --surface-glass: rgba(255, 255, 255, 0.05);
     --surface-glass-hover: rgba(255, 255, 255, 0.08);
     --text-accent: #93c5fd;
-    --text-accent-secondary: #c4b5fd;
-    --text-accent-tertiary: #a78bfa;
+    --text-accent-secondary: #60a5fa;
+    --text-accent-tertiary: #22d3ee;
     --headline-from: #999999;
     --headline-via: #ffffff;
     --headline-to: #999999;
     --scrim: rgba(5, 8, 18, 0.55);
+    --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.14);
     --shadow-elevated: 0 24px 80px rgba(0, 0, 0, 0.35);
     --shadow-navbar: 0 8px 40px rgba(0, 0, 0, 0.25);
     --shadow-drawer: -12px 0 48px rgba(0, 0, 0, 0.35);

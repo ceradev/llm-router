@@ -1,46 +1,55 @@
-# Astro Starter Kit: Basics
+# Web App (Astro + React)
 
-```sh
-npm create astro@latest -- --template basics
-```
+This app uses Astro for page/layout rendering and a React island for the interactive
+LLM Router flow (`hero -> analyzing -> results`).
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Current Architecture
 
-## 🚀 Project Structure
+- `src/pages/index.astro` mounts `LLMRouterApp` with `client:load`.
+- `src/app/LLMRouterApp.tsx` owns interactive UI state, transitions, and abortable
+  recommendation fetches.
+- React providers (`ThemeProvider`, `I18nProvider`) are scoped inside the app island.
 
-Inside of your Astro project, you'll see the following folders and files:
+## Decision: keep a single React island on `/`
 
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
-```
+For the home route, we keep the current pattern: **Astro as the page/layout shell** and
+**one React island** (`LLMRouterApp`) owning the interactive flow and shared state.
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+Multiple islands are only worth introducing if there is a specific, measurable goal
+(see next section) that the current approach cannot meet.
 
-## 🧞 Commands
+## Optimization Goal Before Any Architecture Change
 
-All commands are run from the root of the project, from a terminal:
+Do not change the Astro/React split without a single explicit optimization goal and
+measurable success criteria.
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+Choose one primary goal:
 
-## 👀 Want to learn more?
+- Less JS shipped to the browser
+- Better Time to Interactive (TTI)
+- Better maintainability
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Success criteria (must be defined before refactor):
+
+- **Less JS**: reduce initial JS by at least 25% on `/` (measured from production build
+  assets/chunks and request waterfall).
+- **TTI**: improve median TTI by at least 20% on a throttled profile (4x CPU slowdown,
+  Slow 4G) across 5 runs.
+- **Maintainability**: reduce cross-view state coupling by introducing a documented
+  module boundary (e.g., extracted store or bounded islands) and keep complexity stable
+  (no increase in lint/type errors, no additional duplicated flow logic).
+
+If none of the above can be proven with measurements, keep the current single-island
+architecture.
+
+## Commands
+
+Run from `apps/web`:
+
+| Command           | Action                                      |
+| :---------------- | :------------------------------------------ |
+| `npm install`     | Install dependencies                        |
+| `npm run dev`     | Start local dev server                      |
+| `npm run build`   | Build production assets                     |
+| `npm run preview` | Preview production build locally            |
+| `npm run check`   | Run Astro/TypeScript checks (if configured) |

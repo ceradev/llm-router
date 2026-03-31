@@ -1,0 +1,406 @@
+import { motion, useReducedMotion, type Transition } from "framer-motion";
+import {
+    useEffect,
+    useId,
+    useRef,
+    useState,
+} from "react";
+import { useI18n } from "@/contexts/I18nContext";
+import { cn } from "@/lib/cn";
+import { SectionLabel } from "@/features/landing/components/advanced-options";
+import { IconChevronDown } from "@/shared/components";
+import type {Priority, ResponseDepth, UseCaseId } from "@/features/landing/types";
+import { FALLBACK_PROVIDER_OPTIONS, USE_CASE_IDS, PRIORITY_OPTIONS, RESPONSE_DEPTH_OPTIONS, DEPTH_KEY_BY_VALUE } from "@/features/landing/data";
+import { useModalFocusRestore, useModalEscapeClose, useProvidersDismiss } from "@/features/landing/hooks";
+import { fetchProviders, type ProviderOption } from "@/shared/api/providers";
+
+type Props = {
+    open: boolean;
+    onClose: () => void;
+    onApply: () => void;
+    priority: Priority;
+    setPriority: (p: Priority) => void;
+    useCases: Set<UseCaseId>;
+    toggleUseCase: (id: UseCaseId) => void;
+    providers: Set<string>;
+    toggleProvider: (p: string) => void;
+    responseDepth: ResponseDepth;
+    setResponseDepth: (d: ResponseDepth) => void;
+};
+
+export function AdvancedOptionsModal({
+    open,
+    onClose,
+    onApply,
+    priority,
+    setPriority,
+    useCases,
+    toggleUseCase,
+    providers,
+    toggleProvider,
+    responseDepth,
+    setResponseDepth,
+}: Readonly<Props>) {
+    const { t } = useI18n();
+    const reduceMotion = useReducedMotion() ?? false;
+    const closeBtnRef = useRef<HTMLButtonElement>(null);
+    const [providersOpen, setProvidersOpen] = useState(false);
+    const [providerOptions, setProviderOptions] = useState<ProviderOption[]>([]);
+    const providersRef = useRef<HTMLDivElement>(null);
+    const providersListId = useId();
+    const availableProviders = providerOptions.length > 0
+        ? providerOptions
+        : FALLBACK_PROVIDER_OPTIONS.map((provider) => ({
+            id: -1,
+            slug: provider.slug,
+            display_name: provider.display_name,
+            is_active: true,
+        }));
+    const selectedProviders = availableProviders.filter((provider) => providers.has(provider.slug));
+
+    useEffect(() => {
+        if (!open) return;
+
+        const controller = new AbortController();
+        void fetchProviders(controller.signal).then(
+            (rows) => {
+                if (!controller.signal.aborted) {
+                    setProviderOptions(rows);
+                }
+            },
+            () => {
+                if (!controller.signal.aborted) {
+                    setProviderOptions([]);
+                }
+            },
+        );
+
+        return () => controller.abort();
+    }, [open]);
+
+    useModalFocusRestore(open, closeBtnRef);
+    useModalEscapeClose(open, onClose);
+    useProvidersDismiss(open, providersOpen, providersRef, setProvidersOpen);
+
+    const overlayT: Transition = reduceMotion
+        ? { duration: 0 }
+        : { duration: 0.12 };
+    const dialogT: Transition = reduceMotion
+        ? { duration: 0 }
+        : { type: "tween", duration: 0.14, ease: "easeOut" };
+    const segmentedBgClass =
+        "bg-[--segment-bg] dark:bg-(--segment-bg)";
+    const segmentedActivePillClass =
+        "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) shadow-[0_0_18px_rgba(59,130,246,0.2)]";
+    const useCaseOnClass =
+        "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) text-(--text-primary) shadow-[0_0_14px_rgba(59,130,246,0.16)]";
+    const useCaseOffClass =
+        "text-slate-800 dark:text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
+    const providerTagClass =
+        "border-[#3B82F6]/35 bg-[--surface-glass] dark:bg-(--surface-glass)";
+    const providerListClass =
+        "bg-[--surface-glass] dark:bg-(--surface-glass)";
+    const providerRowOnClass =
+        "bg-[--surface-glass-hover] dark:bg-(--surface-glass-hover) text-(--text-primary)";
+    const providerRowOffClass =
+        "text-slate-800 dark:text-(--text-muted) hover:bg-[--surface-glass-hover] dark:hover:bg-(--surface-glass-hover) hover:text-(--text-primary)";
+
+    if (!open) return null;
+
+    return (
+        <motion.div
+            className="fixed inset-0 z-50 grid place-items-center px-4 py-8 sm:px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={overlayT}
+            onPointerDown={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
+            <motion.div
+                aria-hidden
+                className={cn(
+                    "absolute inset-0",
+                    "bg-(--scrim)",
+                )}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={overlayT}
+            />
+
+            <motion.section
+                role="dialog"
+                aria-modal="true"
+                aria-label={t("advancedOptions")}
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.99, y: 8 }}
+                transition={dialogT}
+                className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-(--border-subtle) bg-(--surface-glass) shadow-(--shadow-elevated) backdrop-blur-xl dark:border-[#3B82F6]/30 dark:bg-linear-to-br dark:from-[#3B82F6]/15 dark:via-(--surface-glass) dark:to-[#0EA5E9]/10"
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                <header className="flex items-center justify-between gap-4 border-b border-(--border-subtle) px-5 py-4 sm:px-6 sm:py-5">
+                    <div className="min-w-0">
+                        <h2 className="truncate text-base font-semibold tracking-tight text-(--text-primary) sm:text-lg">
+                            {t("advancedOptions")}
+                        </h2>
+                    </div>
+                    <button
+                        ref={closeBtnRef}
+                        type="button"
+                        onClick={onClose}
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-(--border-subtle) bg-(--surface-glass) text-(--text-muted) transition-colors hover:bg-(--surface-glass-hover) hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
+                        aria-label={t("close")}
+                    >
+                        <span className="text-lg leading-none">×</span>
+                    </button>
+                </header>
+
+                <div className="max-h-[min(70vh,640px)] overflow-y-auto p-5 sm:p-6">
+                    <div className="relative overflow-visible rounded-2xl p-5 sm:p-6">
+                        <div className="relative space-y-6">
+                            <p className="text-sm leading-relaxed text-slate-800 dark:text-(--text-muted)">
+                                {t("advancedOptionsIntro")}
+                            </p>
+                            <div>
+                                <SectionLabel hint={t("priorityHint")}>
+                                    {t("priority")}
+                                </SectionLabel>
+                                <div
+                                    className={cn(
+                                        "grid grid-cols-1 gap-1 rounded-2xl border border-(--border-subtle) p-1 sm:grid-cols-3 sm:gap-0 sm:rounded-full",
+                                        segmentedBgClass,
+                                    )}
+                                    role="tablist"
+                                    aria-label="Routing priority"
+                                >
+                                    {PRIORITY_OPTIONS.map((p) => (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={priority === p}
+                                            onClick={() => setPriority(p)}
+                                            className={cn(
+                                                "relative min-h-11 rounded-xl px-4 py-2.5 text-sm font-medium capitalize transition-colors duration-200 sm:rounded-full sm:py-2",
+                                                priority === p
+                                                    ? "text-(--text-primary)"
+                                                    : "text-slate-800 dark:text-(--text-muted) hover:opacity-80",
+                                            )}
+                                        >
+                                            {priority === p ? (
+                                                <span
+                                                    className={cn(
+                                                        "absolute inset-0 rounded-full",
+                                                        segmentedActivePillClass,
+                                                    )}
+                                                />
+                                            ) : null}
+                                            <span className="relative z-10">
+                                                {t(p as "quality" | "speed" | "cost")}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <SectionLabel hint={t("useCaseHint")}>
+                                    {t("useCase")}
+                                </SectionLabel>
+                                <div
+                                    className={cn(
+                                        "grid grid-cols-2 gap-1.5 rounded-xl border border-(--border-subtle) p-1.5 sm:grid-cols-3 lg:grid-cols-4",
+                                        segmentedBgClass,
+                                    )}
+                                >
+                                    {USE_CASE_IDS.map(({ id, titleKey }) => {
+                                        const on = useCases.has(id);
+                                        return (
+                                            <button
+                                                key={id}
+                                                type="button"
+                                                onClick={() => toggleUseCase(id)}
+                                                className={cn(
+                                                    "min-h-11 rounded-lg px-3 py-2.5 text-center text-sm font-medium transition-all duration-200 sm:px-4",
+                                                    on ? useCaseOnClass : useCaseOffClass,
+                                                )}
+                                            >
+                                                {t(titleKey)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div>
+                                <SectionLabel hint={t("providersHint")}>
+                                    {t("preferredProviders")}
+                                </SectionLabel>
+                                <div ref={providersRef} className="relative mt-0.5">
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            "flex w-full items-center justify-between gap-2 rounded-xl border border-(--border-subtle) p-2 text-left",
+                                            segmentedBgClass,
+                                        )}
+                                        onClick={() => setProvidersOpen((v) => !v)}
+                                        aria-expanded={providersOpen}
+                                        aria-controls={providersListId}
+                                        aria-label={t("preferredProviders")}
+                                    >
+                                        <div className="flex min-h-11 flex-1 flex-wrap items-center gap-2.5">
+                                            {selectedProviders.length > 0 ? (
+                                                selectedProviders.map((provider) => (
+                                                    <span
+                                                        key={provider.slug}
+                                                        className={cn(
+                                                            "rounded-lg border px-3.5 py-2 text-sm font-medium text-(--text-primary)",
+                                                            providerTagClass,
+                                                        )}
+                                                    >
+                                                        {provider.display_name}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="px-2 text-sm text-slate-800/90 dark:text-(--text-muted)/90">
+                                                    {t("preferredProviders")}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span
+                                            className={cn(
+                                                "rounded-md p-2 text-slate-700 dark:text-(--text-muted) transition-colors hover:text-(--text-primary)",
+                                                "hover:bg-(--surface-glass-hover)",
+                                            )}
+                                        >
+                                            <IconChevronDown
+                                                className={cn(
+                                                    "h-5 w-5 transition-transform",
+                                                    providersOpen ? "rotate-180" : "",
+                                                )}
+                                            />
+                                        </span>
+                                    </button>
+
+                                    {providersOpen ? (
+                                        <ul
+                                            id={providersListId}
+                                            className={cn(
+                                                "absolute left-0 right-0 top-[calc(100%+0.45rem)] z-20 rounded-xl border border-(--border-subtle) p-2 shadow-lg backdrop-blur-md",
+                                                providerListClass,
+                                            )}
+                                        >
+                                            {availableProviders.map((provider) => {
+                                                const on = providers.has(provider.slug);
+                                                return (
+                                                    <li key={provider.slug} className="mb-1 last:mb-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleProvider(provider.slug)}
+                                                            className={cn(
+                                                                "flex w-full items-center justify-between rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors",
+                                                                on ? providerRowOnClass : providerRowOffClass,
+                                                            )}
+                                                        >
+                                                            <span>{provider.display_name}</span>
+                                                            <span
+                                                                className={cn(
+                                                                    "h-2.5 w-2.5 rounded-full transition-colors",
+                                                                    on
+                                                                        ? "bg-[#3B82F6]"
+                                                                        : "bg-transparent ring-1 ring-(--border-subtle)",
+                                                                )}
+                                                            />
+                                                        </button>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            <div>
+                                <SectionLabel hint={t("responseDepthHint")}>
+                                    {t("responseDepth")}
+                                </SectionLabel>
+                                <div
+                                    className={cn(
+                                        "grid grid-cols-1 gap-1 rounded-2xl border border-(--border-subtle) p-1 sm:grid-cols-3 sm:gap-0 sm:rounded-full",
+                                        segmentedBgClass,
+                                    )}
+                                    role="tablist"
+                                    aria-label={t("responseDepth")}
+                                >
+                                    {RESPONSE_DEPTH_OPTIONS.map((d) => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={responseDepth === d}
+                                            onClick={() => setResponseDepth(d)}
+                                            className={cn(
+                                                "relative min-h-11 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 sm:rounded-full sm:py-2",
+                                                responseDepth === d
+                                                    ? "text-(--text-primary)"
+                                                    : "text-slate-800 dark:text-(--text-muted) hover:opacity-80",
+                                            )}
+                                        >
+                                            {responseDepth === d ? (
+                                                <span
+                                                    className={cn(
+                                                        "absolute inset-0 rounded-full",
+                                                        segmentedActivePillClass,
+                                                    )}
+                                                />
+                                            ) : null}
+                                            <span className="relative z-10">
+                                                {t(DEPTH_KEY_BY_VALUE[d])}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="mt-2.5 text-sm text-slate-800 dark:text-(--text-muted)">
+                                    {t("responseDepthHelper")}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <footer className="flex flex-col gap-3 border-t border-(--border-subtle) px-5 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6 sm:py-5">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl px-5 py-3 text-sm font-medium text-slate-800 dark:text-(--text-muted) transition-colors hover:text-(--text-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-subtle)"
+                    >
+                        {t("close")}
+                    </button>
+                    <motion.button
+                        type="button"
+                        onClick={onApply}
+                        whileHover={
+                            reduceMotion
+                                ? undefined
+                                : { scale: 1.02, backgroundPosition: "100% 50%" }
+                        }
+                        whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+                        transition={{ type: "spring", stiffness: 420, damping: 26 }}
+                        className="relative overflow-hidden rounded-xl bg-[linear-gradient(135deg,#3B82F6,#1E40AF)] bg-size-[200%_200%] bg-left px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(59,130,246,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-(--ring-focus)"
+                    >
+                        <span className="relative z-10">{t("apply")}</span>
+                        <motion.span
+                            className="absolute inset-0 bg-linear-to-r from-white/0 via-white/10 to-white/0"
+                            initial={{ x: "-100%" }}
+                            whileHover={reduceMotion ? undefined : { x: "100%" }}
+                            transition={{ duration: 0.6 }}
+                        />
+                    </motion.button>
+                </footer>
+            </motion.section>
+        </motion.div>
+    );
+}

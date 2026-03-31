@@ -1,0 +1,209 @@
+from __future__ import annotations
+
+from packages.core.scoring.engine import ScoreBreakdown, compute_model_score
+from packages.domain.gateway import (
+    GatewayTask,
+    Intent,
+    NoModelsAvailableError,
+    Priority,
+    RoutingDecision,
+    ScoredCandidate,
+)
+from packages.domain.models import ModelProfile
+from packages.infrastructure.db.repositories.feedback_repository import FeedbackRepository
+from packages.infrastructure.db.repositories.model_repository import ModelRepository, ModelRoutingRow
+from packages.services.prompt_evaluation.types import PromptEvaluationResult
+
+
+def _pros_cons_for(*, model: ModelProfile, priority: Priority) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    pros: list[str] = []
+    cons: list[str] = []
+    if model.quality_score >= 4:
+        pros.append("strong_quality_profile")
+    elif model.quality_score <= 2:
+        cons.append("limited_quality_profile")
+    if model.latency_score >= 4:
+        pros.append("low_latency_profile")
+    if model.cost_score >= 4:
+        pros.append("economical_profile")
+    if priority == Priority.LOW_COST and model.cost_score < 3:
+        cons.append("higher_cost_for_low_cost_priority")
+    return (tuple(pros), tuple(cons))
+
+
+class ModelSelector:
+    def __init__(self, *, model_repository: ModelRepository) -> None:
+        self.model_repository = model_repository
+
+    def build_decision(
+        self,
+        *,
+        task: GatewayTask,
+        intent: Intent,
+        evaluation: PromptEvaluationResult,
+        require_json: bool | None = None,
+    ) -> RoutingDecision:
+        effective_json = task.require_json if require_json is None else require_json
+        db_rows, pref_applied, pref_fallback_used, normalized_pref = self._load_candidates(
+            task=task,
+            priority=task.priority,
+            require_json=effective_json,
+        )
+        candidates, scored_candidates, score_breakdowns = self._rank_candidates(
+            task=task,
+            rows=db_rows,
+            priority=task.priority,
+            evaluation=evaluation,
+        )
+
+        if not candidates:
+            raise NoModelsAvailableError("Model catalog not initialized")
+
+        temperature = task.temperature
+        if temperature is None:
+            temperature = self._default_temperature(intent, candidates[0])
+
+        reason = self._build_reason(
+            intent=intent,
+            priority=task.priority,
+            primary_model=candidates[0].model_id,
+            ranked=candidates,
+            score_breakdowns=score_breakdowns,
+        )
+
+        return RoutingDecision(
+            intent=intent,
+            reason=reason,
+            applied_temperature=temperature,
+            candidates=candidates,
+            scored_candidates=scored_candidates,
+            preferred_providers=normalized_pref,
+            preferred_providers_applied=pref_applied,
+            preferred_providers_fallback_used=pref_fallback_used,
+        )
+
+    def _load_candidates(
+        self,
+        *,
+        task: GatewayTask,
+        priority: Priority,
+        require_json: bool,
+    ) -> tuple[list[ModelRoutingRow], bool, bool, list[str]]:
+        raw = task.preferred_providers
+        normalized_pref = [str(p).strip().lower() for p in raw if str(p).strip()]
+
+        if not normalized_pref:
+            rows = self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
+            return (rows, False, False, [])
+
+        filtered = self.model_repository.list_routing_candidates(
+            priority=priority,
+            require_json=require_json,
+            provider_slugs=normalized_pref,
+        )
+        if filtered:
+            return (filtered, True, False, normalized_pref)
+
+        # Fallback behavior: if strict filter yields no candidates, use full catalog
+        rows = self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
+        return (rows, False, True, normalized_pref)
+
+    def _rank_candidates(
+        self,
+        *,
+        task: GatewayTask,
+        rows: list[ModelRoutingRow],
+        priority: Priority,
+        evaluation: PromptEvaluationResult,
+    ) -> tuple[list[ModelProfile], tuple[ScoredCandidate, ...], dict[str, ScoreBreakdown]]:
+        scored: list[tuple[float, ModelProfile, ModelRoutingRow, ScoreBreakdown]] = []
+        model_ids = [row.db_model_id for row in rows]
+        feedback_stats: dict[int, tuple[float | None, int]] = {}
+        session = getattr(self.model_repository, "session", None)
+        if session is not None:
+            feedback_stats = FeedbackRepository(session).get_feedback_stats_by_model_ids(model_ids=model_ids)
+        for row in rows:
+            avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
+            breakdown = compute_model_score(
+                model=row.model,
+                priority=priority,
+                priority_weight=row.priority_weight,
+                complexity_score=evaluation.complexity_score,
+                requires_code=evaluation.requires_code,
+                requires_reasoning=evaluation.requires_reasoning,
+                requires_tools=evaluation.requires_tools,
+                use_cases=task.use_cases,
+                preferred_providers=task.preferred_providers,
+                avg_rating=avg_rating,
+                ratings_count=ratings_count,
+            )
+            scored.append((breakdown.total, row.model, row, breakdown))
+
+        scored.sort(key=lambda item: (-item[0], item[1].model_id))
+        candidates = [model for _, model, _, _ in scored]
+        score_breakdowns = {model.model_id: breakdown for _, model, _, breakdown in scored}
+
+        scored_candidates: list[ScoredCandidate] = []
+        for rank, (_, model, row, breakdown) in enumerate(scored, start=1):
+            avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
+            pros, cons = _pros_cons_for(model=model, priority=priority)
+            scored_candidates.append(
+                ScoredCandidate(
+                    model=model,
+                    priority_weight=row.priority_weight,
+                    db_model_id=row.db_model_id,
+                    rank=rank,
+                    quality_score=float(model.quality_score),
+                    latency_score=float(model.latency_score),
+                    cost_score=float(model.cost_score),
+                    final_score=breakdown.total,
+                    model_score_adjustment=breakdown.model_score_adjustment,
+                    explanation=breakdown.explanation,
+                    pros=pros,
+                    cons=cons,
+                    user_rating=avg_rating,
+                    user_rating_count=ratings_count,
+                )
+            )
+
+        return candidates, tuple(scored_candidates), score_breakdowns
+
+    def _default_temperature(self, intent: Intent, primary_model: ModelProfile) -> float:
+        if intent == Intent.CODE:
+            return 0.1
+        if intent == Intent.CREATIVE:
+            return 0.8
+        if intent == Intent.ANALYSIS:
+            return 0.2
+        return primary_model.default_temperature
+
+    def _build_reason(
+        self,
+        *,
+        intent: Intent,
+        priority: Priority,
+        primary_model: str,
+        ranked: list[ModelProfile],
+        score_breakdowns: dict[str, ScoreBreakdown],
+    ) -> str:
+        short_name = primary_model.split("/")[-1].replace("-", " ").title()
+        intent_label = {
+            Intent.CODE: "coding",
+            Intent.ANALYSIS: "analysis",
+            Intent.CREATIVE: "creative",
+            Intent.GENERAL: "general",
+        }.get(intent, "general")
+        priority_label = {
+            Priority.HIGH_QUALITY: "best quality",
+            Priority.LOW_LATENCY: "fast response",
+            Priority.LOW_COST: "lower cost",
+            Priority.BALANCED: "balanced quality and speed",
+        }.get(priority, "balanced quality and speed")
+
+        reason = (
+            f"We picked {short_name} because it is a strong match for {intent_label} tasks "
+            f"and your preference for {priority_label}."
+        )
+        if ranked and score_breakdowns.get(primary_model) is not None:
+            reason += " It ranked highest among the currently available options."
+        return reason
