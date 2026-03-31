@@ -1,0 +1,60 @@
+-- ============================================================
+-- SQL DUMP - LLM Router Database (Complete)
+-- ============================================================
+-- Execute the following commands to generate a complete dump:
+--
+-- pg_dump -h localhost -U <user> -d llm_router \
+--   --data-only \
+--   --column-inserts \
+--   --no-owner \
+--   --no-privileges \
+--   > migrations/production_dump.sql
+--
+-- If you prefer just the catalog (models + providers), use:
+--
+-- pg_dump -h localhost -U <user> -d llm_router \
+--   --data-only \
+--   --column-inserts \
+--   --no-owner \
+--   --no-privileges \
+--   -t providers \
+--   -t llm_models \
+--   -t llm_model_capabilities \
+--   -t llm_model_routing_settings \
+--   > migrations/catalog_only.sql
+
+-- Tablas a exportar:
+-- ================
+-- providers           -> Proveedores (OpenAI, Anthropic, etc.)
+-- llm_models          -> Catálogo de modelos
+-- llm_model_capabilities -> Capacidades por modelo
+-- llm_model_routing_settings -> Config de routing
+-- llm_requests        -> Historial de requests
+-- request_analysis    -> Análisis de requests
+-- model_evaluation    -> Evaluaciones
+-- llm_attempt         -> Intentos de ejecución
+-- llm_execution       -> Ejecuciones finales
+-- llm_feedback        -> Feedback de usuarios
+-- provider_sync_runs  -> Historial de sincronizaciones
+-- model_benchmark_runs -> Benchmarks
+-- daily_metrics       -> Métricas diarias
+--
+-- Para restaurar en producción:
+-- =============================
+-- psql -h <prod_host> -U <user> -d llm_router_prod < migrations/production_dump.sql
+--
+-- Si hay conflictos de IDs (sequences):
+-- =====================================
+-- SELECT setval('providers_id_seq', (SELECT MAX(id) FROM providers));
+-- SELECT setval('llm_models_id_seq', (SELECT MAX(id) FROM llm_models));
+-- SELECT setval('llm_requests_id_seq', (SELECT MAX(id) FROM llm_requests));
+-- SELECT setval('request_analysis_id_seq', (SELECT MAX(id) FROM request_analysis));
+-- SELECT setval('model_evaluation_id_seq', (SELECT MAX(id) FROM model_evaluation));
+-- SELECT setval('llm_attempt_id_seq', (SELECT MAX(id) FROM llm_attempt));
+-- SELECT setval('llm_execution_id_seq', (SELECT MAX(id) FROM llm_execution));
+-- SELECT setval('llm_feedback_id_seq', (SELECT MAX(id) FROM llm_feedback));
+-- SELECT setval('provider_sync_runs_id_seq', (SELECT MAX(id) FROM provider_sync_runs));
+-- SELECT setval('model_benchmark_runs_id_seq', (SELECT MAX(id) FROM model_benchmark_runs));
+-- SELECT setval('daily_metrics_id_seq', (SELECT MAX(id) FROM daily_metrics));
+-- SELECT setval('llm_model_capabilities_id_seq', (SELECT MAX(id) FROM llm_model_capabilities));
+-- SELECT setval('llm_model_routing_settings_id_seq', (SELECT MAX(id) FROM llm_model_routing_settings));

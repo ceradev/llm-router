@@ -1,0 +1,51 @@
+import { useI18n } from "@/contexts/I18nContext"
+import { InteractiveDemoCard } from "@/features/landing/components/interactive-demo"
+
+export function WhySection() {
+  const { t } = useI18n()
+
+  return (
+    <section className="relative mt-12 sm:mt-14">
+      <div className="relative overflow-hidden rounded-3xl border border-(--border-subtle) bg-(--surface-glass) backdrop-blur-xl">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(14,165,233,0.16),transparent_58%),radial-gradient(circle_at_50%_120%,rgba(59,130,246,0.10),transparent_55%)]"
+        />
+
+        <div className="relative z-10 grid gap-8 p-6 sm:grid-cols-2 sm:items-center sm:gap-10 sm:p-10">
+          <div className="min-w-0">
+            <p className="inline-flex items-center rounded-full border border-[#3B82F6]/25 bg-[#3B82F6]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-(--text-accent)">
+              {t("whyKicker")}
+            </p>
+            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-(--text-primary) sm:text-3xl">
+              {t("whyTitle")}
+            </h2>
+            <p className="mt-3 max-w-prose text-sm leading-relaxed text-(--text-muted) sm:text-base">
+              {t("whyBody")}
+            </p>
+          </div>
+
+          <div className="relative min-h-56 overflow-hidden rounded-2xl border border-(--border-subtle) bg-[linear-gradient(145deg,rgba(59,130,246,0.12),rgba(14,165,233,0.08)_52%,rgba(2,6,23,0.06))] shadow-[0_0_48px_rgba(59,130,246,0.08)] sm:min-h-64">
+            <div
+              aria-hidden
+              className="absolute -left-10 -top-10 h-52 w-52 rounded-full bg-[#3B82F6]/16 blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="absolute -bottom-14 -right-14 h-60 w-60 rounded-full bg-[#0EA5E9]/14 blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.06),rgba(255,255,255,0)_55%)]"
+            />
+
+            <div className="absolute inset-0 z-10 flex items-center justify-center p-2 sm:p-3">
+              <InteractiveDemoCard stretch />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+

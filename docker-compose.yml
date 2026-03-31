@@ -1,0 +1,69 @@
+# Compose at repo root — use this with Coolify (project directory = repo root).
+# Build context `.` resolves to this directory so apps/server and apps/web are visible.
+#
+# Local: from repo root:  docker compose up --build  (optionally --env-file .env)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llm-router-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB?POSTGRES_DB is required}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: llm-router-backend
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app:/app/apps/server
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
+      ADMIN_API_KEY: ${ADMIN_API_KEY?ADMIN_API_KEY is required}
+      OPENROUTER_AUTO_SYNC_ON_EMPTY_CATALOG: ${OPENROUTER_AUTO_SYNC_ON_EMPTY_CATALOG:-true}
+      OPENROUTER_SYNC_ON_STARTUP: ${OPENROUTER_SYNC_ON_STARTUP:-true}
+      OPENROUTER_ENABLE_PERIODIC_SYNC: ${OPENROUTER_ENABLE_PERIODIC_SYNC:-true}
+      OPENROUTER_SYNC_INTERVAL_HOURS: ${OPENROUTER_SYNC_INTERVAL_HOURS:-6}
+      CATALOG_EVALUATION_AFTER_OPENROUTER_SYNC: ${CATALOG_EVALUATION_AFTER_OPENROUTER_SYNC:-true}
+      CATALOG_EVALUATION_MAX_MODELS_PER_RUN: ${CATALOG_EVALUATION_MAX_MODELS_PER_RUN:-50}
+      CATALOG_EVALUATION_MAX_LIVE_PER_RUN: ${CATALOG_EVALUATION_MAX_LIVE_PER_RUN:-10}
+      CATALOG_EVALUATION_PROVIDER_ALLOWLIST: ${CATALOG_EVALUATION_PROVIDER_ALLOWLIST:-}
+      CATALOG_EVALUATION_INCLUDE_VERIFIED_LIVE: ${CATALOG_EVALUATION_INCLUDE_VERIFIED_LIVE:-false}
+      CATALOG_EVALUATION_LIVE_DELAY_SECONDS: ${CATALOG_EVALUATION_LIVE_DELAY_SECONDS:-2.0}
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: llm-router-frontend
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://backend:8000}
+      PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
+    ports:
+      - "4321:4321"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
