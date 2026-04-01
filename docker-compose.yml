@@ -95,4 +95,4 @@ networks:
 
   web:
     external: true
-    name: dokploy
+    name: dokploy-network
