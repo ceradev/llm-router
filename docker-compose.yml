@@ -50,20 +50,22 @@ services:
         condition: service_healthy
 
   frontend:
-    build:
-      context: ./apps/web
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      PUBLIC_API_BASE_URL: http://api.llmrouter.es
-      PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
+  build:
+    context: ./apps/web
+    dockerfile: Dockerfile
+    args:
+      PUBLIC_API_BASE_URL: http://api.llmrouter.es   # 👈 AQUÍ
+  restart: unless-stopped
 
-    ports:
-      - "4321:4321"
+  environment:
+    PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
 
-    depends_on:
-      backend:
-        condition: service_started
+  ports:
+    - "4321:4321"
+
+  depends_on:
+    backend:
+      condition: service_started
 
 volumes:
   postgres_data:
