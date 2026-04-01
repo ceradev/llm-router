@@ -33,5 +33,5 @@ done && \
 echo '📦 Running migrations...' && \
 alembic -c apps/server/alembic.ini upgrade head && \
 echo '🚀 Starting API...' && \
-uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
+uvicorn apps/server/app.api.main:app --host 0.0.0.0 --port 8000 \
 "]
