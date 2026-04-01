@@ -82,7 +82,6 @@ La filosofia es "routing con criterio": decisiones reproducibles, medibles y exp
 ![Estado de analisis](docs/images/analyzing-state.png)
 ![Mejor resultado](docs/images/top-result-card.png)
 ![Modelos por categoria y comparativa](docs/images/category-cards-and-table.png)
-![Features y footer](docs/images/features-and-footer.png)
 
 ## Inicio rapido
 
