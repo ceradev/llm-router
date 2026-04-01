@@ -48,7 +48,6 @@ async def _periodic_openrouter_sync() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    run_migrations()
     settings = get_settings()
     if settings.seed_models_on_startup:
         try:
