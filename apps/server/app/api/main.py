@@ -95,6 +95,7 @@ def create_app() -> FastAPI:
             "http://localhost:3000",
             "http://127.0.0.1:3000",
             "https://api.llmrouter.es",
+            "https://llmrouter.es",
             "https://www.llmrouter.es",
         ],
         allow_credentials=True,
