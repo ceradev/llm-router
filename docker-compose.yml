@@ -1,94 +1,96 @@
-# Compose at repo root — use this with Coolify (project directory = repo root).
-# Build context `.` resolves to this directory so apps/server and apps/web are visible.
-#
-# Local: from repo root:  docker compose up --build  (optionally --env-file .env)
+version: "3.9"
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: llm-router-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB?POSTGRES_DB is required}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 3s
+      interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - internal
 
   backend:
     build:
-      context: .
-      dockerfile: apps/server/Dockerfile
-    container_name: llm-router-backend
+      context: ./apps/server
+      dockerfile: Dockerfile
     restart: unless-stopped
-    working_dir: /app
     environment:
-      PYTHONPATH: /app:/app/apps/server
+      PYTHONPATH: /app
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
-      ADMIN_API_KEY: ${ADMIN_API_KEY?ADMIN_API_KEY is required}
+
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+
       OPENROUTER_AUTO_SYNC_ON_EMPTY_CATALOG: ${OPENROUTER_AUTO_SYNC_ON_EMPTY_CATALOG:-true}
       OPENROUTER_SYNC_ON_STARTUP: ${OPENROUTER_SYNC_ON_STARTUP:-true}
       OPENROUTER_ENABLE_PERIODIC_SYNC: ${OPENROUTER_ENABLE_PERIODIC_SYNC:-true}
       OPENROUTER_SYNC_INTERVAL_HOURS: ${OPENROUTER_SYNC_INTERVAL_HOURS:-6}
+
       CATALOG_EVALUATION_AFTER_OPENROUTER_SYNC: ${CATALOG_EVALUATION_AFTER_OPENROUTER_SYNC:-true}
       CATALOG_EVALUATION_MAX_MODELS_PER_RUN: ${CATALOG_EVALUATION_MAX_MODELS_PER_RUN:-50}
       CATALOG_EVALUATION_MAX_LIVE_PER_RUN: ${CATALOG_EVALUATION_MAX_LIVE_PER_RUN:-10}
       CATALOG_EVALUATION_PROVIDER_ALLOWLIST: ${CATALOG_EVALUATION_PROVIDER_ALLOWLIST:-}
       CATALOG_EVALUATION_INCLUDE_VERIFIED_LIVE: ${CATALOG_EVALUATION_INCLUDE_VERIFIED_LIVE:-false}
       CATALOG_EVALUATION_LIVE_DELAY_SECONDS: ${CATALOG_EVALUATION_LIVE_DELAY_SECONDS:-2.0}
-    ports:
-      - "8000:8000"
+
     depends_on:
       postgres:
         condition: service_healthy
+
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
-        ]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 120s
-    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000
+
+    networks:
+      - internal
+      - web
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.llmrouter.es`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
   frontend:
     build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    container_name: llm-router-frontend
+      context: ./apps/web
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://backend:8000}
+      PUBLIC_API_BASE_URL: https://api.llmrouter.es
       PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
-    ports:
-      - "4321:4321"
+
     depends_on:
       backend:
         condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "bun",
-          "-e",
-          "fetch('http://127.0.0.1:4321/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+
+    networks:
+      - web
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`llmrouter.es`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=4321"
 
 volumes:
   postgres_data:
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    external: true
