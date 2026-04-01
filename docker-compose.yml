@@ -55,7 +55,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      PUBLIC_API_BASE_URL: http://backend:8000
+      PUBLIC_API_BASE_URL: http://api.llmrouter.es
       PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
 
     ports:
