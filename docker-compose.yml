@@ -8,6 +8,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -15,8 +17,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - internal
 
   backend:
     build:
@@ -42,26 +42,12 @@ services:
       CATALOG_EVALUATION_INCLUDE_VERIFIED_LIVE: ${CATALOG_EVALUATION_INCLUDE_VERIFIED_LIVE:-false}
       CATALOG_EVALUATION_LIVE_DELAY_SECONDS: ${CATALOG_EVALUATION_LIVE_DELAY_SECONDS:-2.0}
 
+    ports:
+      - "8000:8000"
+
     depends_on:
       postgres:
         condition: service_healthy
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-    networks:
-      - internal
-      - web
-
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.llmrouter.es`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
   frontend:
     build:
@@ -69,30 +55,15 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      PUBLIC_API_BASE_URL: https://api.llmrouter.es
+      PUBLIC_API_BASE_URL: http://backend:8000
       PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
+
+    ports:
+      - "4321:4321"
 
     depends_on:
       backend:
-        condition: service_healthy
-
-    networks:
-      - web
-
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`llmrouter.es`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.frontend.loadbalancer.server.port=4321"
+        condition: service_started
 
 volumes:
   postgres_data:
-
-networks:
-  internal:
-    driver: bridge
-
-  web:
-    external: true
-    name: web
