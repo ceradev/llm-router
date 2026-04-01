@@ -66,6 +66,32 @@ scripts/            scripts operativos (catalogo, monitor)
 - Datos/Infra: PostgreSQL 16, Docker, Docker Compose
 - Tooling: `bun` (web), `uv` + `pytest` (backend)
 
+## ⚙️ Uso de CubePath
+
+Se integra CubePath como capa de ejecución resiliente:
+
+- Fallback automático multi-provider  
+- Routing inteligente si falla el modelo principal  
+- Abstracción de proveedores (OpenAI, Anthropic, etc.)  
+- Mejora de disponibilidad en producción
+
+## 🖥️ Infraestructura (real)
+
+El sistema está desplegado sobre un VPS gestionado con CubePath:
+
+- **Servidor:** `vps22425.cubepath.net`  
+- **IP:** `194.26.100.158`  
+- **Plan:** gp.micro  
+
+### Specs
+
+- 2 vCPU  
+- 4 GB RAM  
+- 80 GB SSD  
+- 5 TB bandwidth  
+
+💸 **Coste aproximado:** $9.5/mes  
+
 ## Inspiracion del proyecto
 
 LLM Router se inspira en un problema real de equipos AI productivos:
