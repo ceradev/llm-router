@@ -14,13 +14,14 @@ COPY apps/server/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- copiar código ----
-  COPY apps/server ./apps/server
-  COPY packages ./packages
+COPY apps/server ./apps/server
+COPY packages ./packages
 
-# dump
+# (opcional)
 COPY apps/server/production_dump.sql ./production_dump.sql
 
-ENV PYTHONPATH=/app
+# 👇 CLAVE REAL
+ENV PYTHONPATH=/app/apps/server
 
 EXPOSE 8000
 
@@ -33,5 +34,5 @@ done && \
 echo '📦 Running migrations...' && \
 alembic -c apps/server/alembic.ini upgrade head && \
 echo '🚀 Starting API...' && \
-uvicorn apps.server.app.api.main:app --host 0.0.0.0 --port 8000 \
+uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
 "]
