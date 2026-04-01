@@ -1,24 +1,29 @@
-FROM oven/bun:1-alpine
+# ---------- BUILD ----------
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
+# instalar deps
 COPY apps/web/package.json apps/web/bun.lock ./
-
 RUN bun install --frozen-lockfile
 
-COPY apps/web ./
+# copiar código
+COPY apps/web .
 
+# build astro
 RUN bun run build
 
+# ---------- PRODUCTION ----------
 FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-COPY --from=0 /app/dist ./dist
-COPY --from=0 /app/package.json ./
+# instalar servidor estático
+RUN bun add -g serve
 
-RUN bun install --frozen-lockfile
+# copiar build final
+COPY --from=builder /app/dist ./dist
 
 EXPOSE 4321
 
-CMD ["bun", "x", "astro", "preview", "--host", "0.0.0.0", "--port", "4321"]
+CMD ["serve", "-s", "dist", "-l", "4321"]
