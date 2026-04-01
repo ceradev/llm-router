@@ -26,7 +26,7 @@ EXPOSE 8000
 
 CMD ["sh", "-c", "\
 echo '⏳ Waiting for database...' && \
-until python -c \"import psycopg, os; psycopg.connect(os.environ['DATABASE_URL'])\"; do \
+until python -c \"import psycopg, os; psycopg.connect(os.environ['DATABASE_URL'].replace('postgresql+psycopg://','postgresql://'))\"; do \
   echo 'DB not ready...'; \
   sleep 2; \
 done && \
