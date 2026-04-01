@@ -2,19 +2,24 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# ---- system deps ----
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc curl \
     && rm -rf /var/lib/apt/lists/*
 
+# ---- python deps ----
 RUN pip install --no-cache-dir --upgrade pip
 
-COPY apps/server/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY apps/server ./apps/server
-COPY apps/server/production_dump.sql ./production_dump.sql
+# ---- copiar código ----
+COPY . .
 
-ENV PYTHONPATH=/app:/app/apps/server
+# dump
+COPY production_dump.sql ./production_dump.sql
+
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
@@ -26,7 +31,7 @@ for i in $(seq 1 20); do \
 done && \
 echo '📦 Running migrations...' && \
 alembic upgrade head && \
-echo '🗄️ Checking seed...' && \
+echo '🗄️ Running seed once...' && \
 python -c \"\
 import psycopg, os; \
 conn=psycopg.connect(os.environ['DATABASE_URL']); \
@@ -35,16 +40,11 @@ cur.execute('CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, valu
 cur.execute(\\\"SELECT value FROM app_metadata WHERE key='seed_done'\\\"); \
 res=cur.fetchone(); \
 \
-import sys; \
-\
 if not res: \
-    print('Running seed...'); \
     f=open('production_dump.sql'); \
     cur.execute(f.read()); \
     cur.execute(\\\"INSERT INTO app_metadata (key,value) VALUES ('seed_done','true')\\\"); \
     conn.commit(); \
-else: \
-    print('Seed already done'); \
 \
 conn.close(); \
 \" && \
