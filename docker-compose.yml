@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
     environment:
       PYTHONPATH: /app
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       ADMIN_API_KEY: ${ADMIN_API_KEY}
@@ -95,4 +95,4 @@ networks:
 
   web:
     external: true
-    name: dokploy   # 👈 🔥 ESTO ES LO QUE TE FALTABA
+    name: dokploy
