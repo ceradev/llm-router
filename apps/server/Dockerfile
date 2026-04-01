@@ -12,7 +12,7 @@ COPY apps/server/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY apps/server ./apps/server
-COPY apps/server/dump.sql ./dump.sql
+COPY apps/server/production_dump.sql ./production_dump.sql
 
 ENV PYTHONPATH=/app:/app/apps/server
 
@@ -39,7 +39,7 @@ import sys; \
 \
 if not res: \
     print('Running seed...'); \
-    f=open('dump.sql'); \
+    f=open('production_dump.sql'); \
     cur.execute(f.read()); \
     cur.execute(\\\"INSERT INTO app_metadata (key,value) VALUES ('seed_done','true')\\\"); \
     conn.commit(); \
