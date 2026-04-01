@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # dump
-COPY production_dump.sql ./production_dump.sql
+COPY apps/server/production_dump.sql ./production_dump.sql
 
 ENV PYTHONPATH=/app
 
