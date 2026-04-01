@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ---- copiar código ----
   COPY apps/server ./apps/server
   COPY packages ./packages
-  COPY migrations ./migrations
 
 # dump
 COPY apps/server/production_dump.sql ./production_dump.sql
