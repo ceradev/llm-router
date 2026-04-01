@@ -23,31 +23,14 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD sh -c "\
+CMD ["sh", "-c", "\
 echo '⏳ Waiting for database...' && \
-for i in $(seq 1 20); do \
-  python -c \"import psycopg, os; psycopg.connect(os.environ['DATABASE_URL'])\" \
-  && break || sleep 2; \
+until python -c \"import psycopg, os; psycopg.connect(os.environ['DATABASE_URL'])\"; do \
+  echo 'DB not ready...'; \
+  sleep 2; \
 done && \
 echo '📦 Running migrations...' && \
 alembic upgrade head && \
-echo '🗄️ Running seed once...' && \
-python -c \"\
-import psycopg, os; \
-conn=psycopg.connect(os.environ['DATABASE_URL']); \
-cur=conn.cursor(); \
-cur.execute('CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT)'); \
-cur.execute(\\\"SELECT value FROM app_metadata WHERE key='seed_done'\\\"); \
-res=cur.fetchone(); \
-\
-if not res: \
-    f=open('production_dump.sql'); \
-    cur.execute(f.read()); \
-    cur.execute(\\\"INSERT INTO app_metadata (key,value) VALUES ('seed_done','true')\\\"); \
-    conn.commit(); \
-\
-conn.close(); \
-\" && \
 echo '🚀 Starting API...' && \
-exec uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
-"
+uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
+"]
