@@ -54,7 +54,7 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
       args:
-        PUBLIC_API_BASE_URL: http://api.llmrouter.es
+        PUBLIC_API_BASE_URL: https://api.llmrouter.es
     restart: unless-stopped
 
     environment:
