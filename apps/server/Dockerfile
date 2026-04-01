@@ -31,7 +31,7 @@ until python -c \"import psycopg, os; psycopg.connect(os.environ['DATABASE_URL']
   sleep 2; \
 done && \
 echo '📦 Running migrations...' && \
-alembic upgrade head && \
+alembic -c apps/server/alembic.ini upgrade head && \
 echo '🚀 Starting API...' && \
 uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
 "]
