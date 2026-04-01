@@ -20,7 +20,7 @@ services:
 
   backend:
     build:
-      context: ./apps/server
+      context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
