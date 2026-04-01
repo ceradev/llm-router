@@ -20,7 +20,8 @@ COPY packages ./packages
 # (opcional)
 COPY apps/server/production_dump.sql ./production_dump.sql
 
-# 👇 CLAVE REAL
+WORKDIR /app/apps/server
+
 ENV PYTHONPATH=/app/apps/server
 
 EXPOSE 8000
