@@ -92,5 +92,7 @@ volumes:
 networks:
   internal:
     driver: bridge
+
   web:
     external: true
+    name: dokploy   # 👈 🔥 ESTO ES LO QUE TE FALTABA
