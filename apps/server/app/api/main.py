@@ -21,6 +21,10 @@ from packages.infrastructure.db.alembic_runner import run_migrations
 from packages.infrastructure.db.repositories.model_repository import ModelRepository
 from packages.infrastructure.db.session import engine
 from packages.infrastructure.db.seeds.seed_models import seed_initial_models
+from packages.services.benchmark.catalog_evaluation_orchestrator import (
+    CatalogEvaluationOrchestrator,
+    catalog_evaluation_config_from_settings,
+)
 from packages.services.sync.openrouter_sync_service import OpenRouterSyncService
 
 logger = logging.getLogger(__name__)
@@ -46,6 +50,21 @@ async def _periodic_openrouter_sync() -> None:
             logger.exception("Periodic OpenRouter sync failed")
 
 
+async def _periodic_catalog_evaluation() -> None:
+    settings = get_settings()
+    interval = max(60.0, float(settings.catalog_evaluation_interval_hours) * 3600.0)
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            with Session(engine) as session:
+                cfg = catalog_evaluation_config_from_settings(settings)
+                CatalogEvaluationOrchestrator(session).run(cfg)
+                session.commit()
+            logger.info("Periodic catalog evaluation finished")
+        except Exception:
+            logger.exception("Periodic catalog evaluation failed")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     run_migrations()
@@ -69,11 +88,23 @@ async def lifespan(_: FastAPI):
         except Exception:
             logger.exception("Startup OpenRouter sync failed")
 
-    task: asyncio.Task[None] | None = None
+    if settings.catalog_evaluation_on_startup:
+        try:
+            with Session(engine) as session:
+                cfg = catalog_evaluation_config_from_settings(settings)
+                CatalogEvaluationOrchestrator(session).run(cfg)
+                session.commit()
+            logger.info("Startup catalog evaluation finished")
+        except Exception:
+            logger.exception("Startup catalog evaluation failed")
+
+    tasks: list[asyncio.Task[None]] = []
     if settings.openrouter_enable_periodic_sync:
-        task = asyncio.create_task(_periodic_openrouter_sync())
+        tasks.append(asyncio.create_task(_periodic_openrouter_sync()))
+    if settings.catalog_evaluation_enable_periodic:
+        tasks.append(asyncio.create_task(_periodic_catalog_evaluation()))
     yield
-    if task is not None:
+    for task in tasks:
         task.cancel()
         try:
             await task

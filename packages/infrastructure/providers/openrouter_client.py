@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 class OpenRouterClientError(RuntimeError):
     """Raised when the OpenRouter API cannot be used or parsed."""
 
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 @dataclass(frozen=True)
 class ChatCompletionResult:
@@ -127,7 +131,10 @@ class OpenRouterClient:
             except Exception:  # pragma: no cover - defensive, response may be unavailable
                 detail = ""
             logger.error("OpenRouter chat HTTP status error: %s%s", exc, detail)
-            raise OpenRouterClientError(f"OpenRouter chat completion failed: {exc}{detail}") from exc
+            raise OpenRouterClientError(
+                f"OpenRouter chat completion failed: {exc}{detail}",
+                status_code=exc.response.status_code,
+            ) from exc
         except httpx.HTTPError as exc:
             logger.error("OpenRouter chat HTTP error: %s", exc)
             raise OpenRouterClientError(f"OpenRouter chat completion failed: {exc}") from exc
@@ -219,7 +226,10 @@ class OpenRouterClient:
             except Exception:  # pragma: no cover - defensive, response may be unavailable
                 detail = ""
             logger.error("OpenRouter completion HTTP status error: %s%s", exc, detail)
-            raise OpenRouterClientError(f"OpenRouter completion failed: {exc}{detail}") from exc
+            raise OpenRouterClientError(
+                f"OpenRouter completion failed: {exc}{detail}",
+                status_code=exc.response.status_code,
+            ) from exc
         except httpx.HTTPError as exc:
             logger.error("OpenRouter completion HTTP error: %s", exc)
             raise OpenRouterClientError(f"OpenRouter completion failed: {exc}") from exc

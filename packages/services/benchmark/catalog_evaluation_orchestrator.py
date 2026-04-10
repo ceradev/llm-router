@@ -13,6 +13,7 @@ from packages.infrastructure.config.settings import Settings
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
 from packages.infrastructure.db.models.model_benchmark_run import BenchmarkRunStatus
 from packages.infrastructure.db.models.provider import Provider
+from packages.infrastructure.providers.openrouter_client import OpenRouterClientError
 from packages.services.benchmark.live_model_benchmark_service import LiveModelBenchmarkService
 from packages.services.benchmark.model_benchmark_service import (
     ModelBenchmarkService,
@@ -145,27 +146,61 @@ class CatalogEvaluationOrchestrator:
                 logger.exception("catalog_eval phase=heuristic failed for model_id=%s", model.id)
 
     def _run_live_phase(self, config: CatalogEvaluationConfig, summary: CatalogEvaluationRunSummary) -> None:
-        if config.max_live_benchmarks_per_run <= 0:
-            return
-
         rows = self._session.exec(self._live_rows_stmt(config)).all()
-        done = 0
 
+        providers: dict[str, list[tuple[LLMModel, Provider]]] = {}
         for model, provider in rows:
-            if done >= config.max_live_benchmarks_per_run:
-                break
-            if not self._provider_ok(provider.slug, config):
-                continue
+            if provider.slug not in providers:
+                providers[provider.slug] = []
+            providers[provider.slug].append((model, provider))
 
-            assert model.id is not None
-            try:
-                out = self._live.run_live_benchmark_for_model(
-                    model_id=model.id,
-                    enable_image_text_v2=config.enable_image_text_v2,
-                    strict_image_text_checks=config.strict_image_text_checks,
-                    enable_file_text_v3=config.enable_file_text_v3,
-                    strict_file_text_checks=config.strict_file_text_checks,
-                )
+        done = 0
+        for provider_slug in sorted(providers.keys()):
+
+            provider_models = providers[provider_slug]
+            logger.info(
+                "Starting live evaluation for provider '%s' with %s models (evaluated so far: %s)",
+                provider_slug,
+                len(provider_models),
+                done,
+            )
+
+            for model, provider in provider_models:
+                if not self._provider_ok(provider.slug, config):
+                    continue
+
+                assert model.id is not None
+                out = None
+                max_retries = 3
+                base_delay = config.live_delay_seconds
+
+                for attempt in range(max_retries):
+                    try:
+                        out = self._live.run_live_benchmark_for_model(
+                            model_id=model.id,
+                            enable_image_text_v2=config.enable_image_text_v2,
+                            strict_image_text_checks=config.strict_image_text_checks,
+                            enable_file_text_v3=config.enable_file_text_v3,
+                            strict_file_text_checks=config.strict_file_text_checks,
+                        )
+                        break
+                    except Exception as exc:
+                        is_rate_limit = (
+                            isinstance(exc, OpenRouterClientError) and exc.status_code in (429, 502)
+                        )
+                        if is_rate_limit and attempt < max_retries - 1:
+                            delay = base_delay * (2 ** attempt)
+                            logger.warning(
+                                "catalog_eval phase=live retry for model_id=%s attempt=%s delay=%s: %s",
+                                model.id,
+                                attempt + 1,
+                                delay,
+                                exc,
+                            )
+                            time.sleep(delay)
+                        else:
+                            raise
+
                 done += 1
                 if out.status == BenchmarkRunStatus.SKIPPED_UNSUPPORTED:
                     summary.live_skipped_out_of_scope += 1
@@ -180,14 +215,20 @@ class CatalogEvaluationOrchestrator:
                     out.status.value,
                     out.evaluation_status_after.value,
                 )
-            except Exception as exc:
-                summary.live_errors += 1
-                msg = f"live model_id={model.id} routing_key={model.routing_key}: {exc}"
-                summary.errors.append(msg)
-                logger.exception("catalog_eval phase=live failed for model_id=%s", model.id)
 
-            if done < config.max_live_benchmarks_per_run and config.live_delay_seconds > 0:
-                time.sleep(config.live_delay_seconds)
+                if config.live_delay_seconds > 0:
+                    time.sleep(config.live_delay_seconds)
+
+            logger.info(
+                "Finished provider '%s'. Total evaluated: %s",
+                provider_slug,
+                done,
+            )
+
+        logger.info(
+            "Live evaluation completed: %s models evaluated.",
+            done,
+        )
 
     def _heuristic_rows_stmt(self):
         return (
@@ -211,7 +252,7 @@ class CatalogEvaluationOrchestrator:
             .where(status_filter)
             .where(LLMModel.is_active.is_(True))
             .where(Provider.is_active.is_(True))
-            .order_by(LLMModel.id)
+            .order_by(Provider.slug, LLMModel.id)
         )
 
     def _live_status_filter(self, config: CatalogEvaluationConfig):

@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     admin_api_key: str | None = None
 
     catalog_evaluation_after_openrouter_sync: bool = False
+    catalog_evaluation_on_startup: bool = False
+    catalog_evaluation_enable_periodic: bool = False
+    catalog_evaluation_interval_hours: float = 24.0
     catalog_evaluation_max_models_per_run: int = 50
     catalog_evaluation_max_live_per_run: int = 10
     catalog_evaluation_provider_allowlist: str | None = None

@@ -16,10 +16,27 @@ RUN pip install --no-cache-dir --upgrade pip \
     "httpx>=0.27.0" \
     "pydantic-settings>=2.11.0"
 
-COPY . /app
+# ---- copiar código ----
+COPY apps/server ./apps/server
+COPY packages ./packages
 
-ENV PYTHONPATH=/app:/app/apps/server
+# (opcional)
+COPY apps/server/production_dump.sql ./production_dump.sql
+
+WORKDIR /app
+
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "\
+echo '⏳ Waiting for database...' && \
+until python3 -c 'import psycopg, os; psycopg.connect(os.environ[\"DATABASE_URL\"].replace(\"postgresql+psycopg://\", \"postgresql://\"))'; do \
+  echo 'DB not ready...'; \
+  sleep 2; \
+done && \
+echo '📦 Running migrations...' && \
+cd /app/apps/server && alembic -c alembic.ini upgrade head && \
+echo '🚀 Starting API...' && \
+cd /app/apps/server && uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
+"]
