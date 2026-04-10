@@ -18,14 +18,13 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # ---- copiar código ----
 COPY apps/server ./apps/server
+COPY apps/server/alembic.ini ./alembic.ini
 COPY packages ./packages
+COPY migrations ./migrations
 
-# (opcional)
-COPY apps/server/production_dump.sql ./production_dump.sql
+WORKDIR /app/apps/server
 
-WORKDIR /app
-
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/apps/server
 
 EXPOSE 8000
 
@@ -36,7 +35,7 @@ until python3 -c 'import psycopg, os; psycopg.connect(os.environ[\"DATABASE_URL\
   sleep 2; \
 done && \
 echo '📦 Running migrations...' && \
-cd /app/apps/server && alembic -c alembic.ini upgrade head && \
+alembic -c alembic.ini upgrade head && \
 echo '🚀 Starting API...' && \
-cd /app/apps/server && uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
+uvicorn app.api.main:app --host 0.0.0.0 --port 8000 \
 "]

@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from packages.domain.gateway import Priority
 from packages.domain.models import BenchmarkScope, Capability, ModelProfile
-from sqlalchemy import delete
+from sqlalchemy import delete, Integer
 
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
 from packages.infrastructure.db.models.model_benchmark_run import BenchmarkKind, ModelBenchmarkRun
@@ -278,6 +278,582 @@ class ModelRepository:
         stmt = select(func.count(LLMModel.id))
         row = self.session.exec(stmt).one()
         return _count_scalar(row)
+
+    def count_models_by_evaluation_status(
+        self,
+        *,
+        provider_slug: str | None = None,
+        tier: str | None = None,
+        is_available: bool | None = None,
+    ) -> dict[str, int]:
+        base_stmt = select(
+            LLMModel.evaluation_status,
+            func.count(LLMModel.id)
+        ).group_by(LLMModel.evaluation_status)
+
+        if provider_slug:
+            base_stmt = base_stmt.join(Provider).where(
+                func.lower(Provider.slug) == provider_slug.strip().lower()
+            )
+        if tier:
+            base_stmt = base_stmt.where(func.lower(LLMModel.tier) == tier.strip().lower())
+        if is_available is not None:
+            base_stmt = base_stmt.where(LLMModel.is_available.is_(is_available))
+
+        rows = self.session.exec(base_stmt).all()
+        result = {status.value: count for status, count in rows}
+        
+        total = sum(result.values())
+        result["total"] = total
+        return result
+
+    def get_model_usage_stats(
+        self,
+        *,
+        provider_slug: str | None = None,
+        tier: str | None = None,
+        evaluation_status: str | None = None,
+    ) -> list[dict]:
+        from packages.infrastructure.db.models.llm_request import LLMRequest
+        
+        stmt = select(
+            LLMModel.id,
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            LLMModel.evaluation_status,
+            LLMModel.tier,
+            func.count(LLMRequest.id).label("request_count"),
+            func.sum(func.nullif(LLMRequest.fallback_used, False).cast(Integer)).label("fallback_count"),
+        ).outerjoin(
+            LLMRequest, LLMModel.id == LLMRequest.selected_model_id
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name,
+            LLMModel.evaluation_status, LLMModel.tier
+        )
+
+        if provider_slug:
+            stmt = stmt.join(Provider).where(
+                func.lower(Provider.slug) == provider_slug.strip().lower()
+            )
+        if tier:
+            stmt = stmt.where(func.lower(LLMModel.tier) == tier.strip().lower())
+        if evaluation_status:
+            stmt = stmt.where(func.lower(LLMModel.evaluation_status) == evaluation_status.strip().lower())
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "model_id": row.id,
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "evaluation_status": row.evaluation_status.value if row.evaluation_status else None,
+                "tier": row.tier,
+                "request_count": row.request_count or 0,
+                "fallback_count": row.fallback_count or 0,
+                "success_rate": round((row.request_count - (row.fallback_count or 0)) / max(row.request_count, 1) * 100, 2) if row.request_count else 0,
+            }
+            for row in rows
+        ]
+
+    def get_benchmark_stats(
+        self,
+        *,
+        provider_slug: str | None = None,
+        model_id: int | None = None,
+    ) -> list[dict]:
+        stmt = select(
+            LLMModel.id,
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            func.count(ModelBenchmarkRun.id).label("total_runs"),
+            func.count(func.nullif(ModelBenchmarkRun.status != "completed", True)).label("completed_runs"),
+            func.count(func.nullif(ModelBenchmarkRun.status != "failed", True)).label("failed_runs"),
+            func.avg(ModelBenchmarkRun.quality_score).label("avg_quality_score"),
+        ).outerjoin(
+            ModelBenchmarkRun, LLMModel.id == ModelBenchmarkRun.model_id
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name
+        )
+
+        if provider_slug:
+            stmt = stmt.join(Provider).where(
+                func.lower(Provider.slug) == provider_slug.strip().lower()
+            )
+        if model_id:
+            stmt = stmt.where(LLMModel.id == model_id)
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "model_id": row.id,
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "total_runs": row.total_runs or 0,
+                "completed_runs": row.completed_runs or 0,
+                "failed_runs": row.failed_runs or 0,
+                "success_rate": round((row.completed_runs or 0) / max(row.total_runs, 1) * 100, 2) if row.total_runs else 0,
+                "avg_quality_score": round(row.avg_quality_score, 2) if row.avg_quality_score else None,
+            }
+            for row in rows
+        ]
+
+    def get_providers_overview(self) -> list[dict]:
+        all_providers = self.session.exec(select(Provider)).all()
+        
+        result = []
+        for p in all_providers:
+            models = self.session.exec(
+                select(LLMModel).where(LLMModel.provider_id == p.id)
+            ).all()
+            
+            verified = sum(1 for m in models if m.evaluation_status == ModelEvaluationStatus.VERIFIED)
+            provisional = sum(1 for m in models if m.evaluation_status == ModelEvaluationStatus.PROVISIONAL)
+            cataloged = sum(1 for m in models if m.evaluation_status == ModelEvaluationStatus.CATALOGED)
+            rejected = sum(1 for m in models if m.evaluation_status == ModelEvaluationStatus.REJECTED)
+            
+            result.append({
+                "provider_id": p.id,
+                "slug": p.slug,
+                "display_name": p.display_name,
+                "model_count": len(models),
+                "verified_count": verified,
+                "provisional_count": provisional,
+                "cataloged_count": cataloged,
+                "rejected_count": rejected,
+            })
+        
+        return result
+
+    def get_cost_aggregate(
+        self,
+        *,
+        provider_slug: str | None = None,
+        tier: str | None = None,
+    ) -> dict:
+        from packages.infrastructure.db.models.llm_execution import LLMExecution
+        
+        stmt = select(
+            Provider.slug,
+            func.sum(LLMExecution.input_tokens).label("total_input_tokens"),
+            func.sum(LLMExecution.output_tokens).label("total_output_tokens"),
+            func.count(LLMExecution.id).label("execution_count"),
+        ).select_from(
+            LLMExecution
+        ).join(
+            LLMModel, LLMExecution.model_id == LLMModel.id
+        ).join(
+            Provider, LLMModel.provider_id == Provider.id
+        )
+
+        if provider_slug:
+            stmt = stmt.where(func.lower(Provider.slug) == provider_slug.strip().lower())
+        if tier:
+            stmt = stmt.where(func.lower(LLMModel.tier) == tier.strip().lower())
+
+        stmt = stmt.group_by(Provider.slug)
+
+        rows = self.session.exec(stmt).all()
+        
+        total_input = sum(row.total_input_tokens or 0 for row in rows)
+        total_output = sum(row.total_output_tokens or 0 for row in rows)
+        
+        return {
+            "by_provider": [
+                {
+                    "provider": row.slug,
+                    "input_tokens": row.total_input_tokens or 0,
+                    "output_tokens": row.total_output_tokens or 0,
+                    "execution_count": row.execution_count or 0,
+                }
+                for row in rows
+            ],
+            "total_input_tokens": total_input,
+            "total_output_tokens": total_output,
+            "total_executions": sum(row.execution_count or 0 for row in rows),
+        }
+
+    def get_model_comparison(
+        self,
+        *,
+        limit: int = 10,
+    ) -> dict:
+        from packages.infrastructure.db.models.llm_request import LLMRequest
+        
+        selected_stmt = select(
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            LLMModel.tier,
+            func.count(LLMRequest.id).label("selection_count"),
+        ).join(
+            LLMRequest, LLMModel.id == LLMRequest.selected_model_id
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name, LLMModel.tier
+        ).order_by(func.count(LLMRequest.id).desc()).limit(limit)
+
+        selected_rows = self.session.exec(selected_stmt).all()
+
+        fallback_stmt = select(
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            LLMModel.tier,
+            func.count(LLMRequest.id).label("fallback_count"),
+        ).join(
+            LLMRequest, LLMModel.id == LLMRequest.selected_model_id
+        ).where(
+            LLMRequest.fallback_used == True
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name, LLMModel.tier
+        ).order_by(func.count(LLMRequest.id).desc()).limit(limit)
+
+        fallback_rows = self.session.exec(fallback_stmt).all()
+
+        return {
+            "top_selected": [
+                {
+                    "routing_key": row.routing_key,
+                    "display_name": row.display_name,
+                    "tier": row.tier,
+                    "selection_count": row.selection_count,
+                }
+                for row in selected_rows
+            ],
+            "top_fallbacks": [
+                {
+                    "routing_key": row.routing_key,
+                    "display_name": row.display_name,
+                    "tier": row.tier,
+                    "fallback_count": row.fallback_count,
+                }
+                for row in fallback_rows
+            ],
+        }
+
+    def get_model_usage_stats(
+        self,
+        *,
+        provider_slug: str | None = None,
+        tier: str | None = None,
+        evaluation_status: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> list[dict]:
+        from packages.infrastructure.db.models.llm_request import LLMRequest
+        
+        stmt = select(
+            LLMModel.id,
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            LLMModel.evaluation_status,
+            LLMModel.tier,
+            func.count(LLMRequest.id).label("request_count"),
+            func.sum(func.nullif(LLMRequest.fallback_used, False).cast(Integer)).label("fallback_count"),
+        ).outerjoin(
+            LLMRequest, LLMModel.id == LLMRequest.selected_model_id
+        )
+
+        if from_date:
+            stmt = stmt.where(LLMRequest.created_at >= from_date)
+        if to_date:
+            stmt = stmt.where(LLMRequest.created_at <= to_date)
+
+        stmt = stmt.group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name,
+            LLMModel.evaluation_status, LLMModel.tier
+        )
+
+        if provider_slug:
+            stmt = stmt.join(Provider).where(
+                func.lower(Provider.slug) == provider_slug.strip().lower()
+            )
+        if tier:
+            stmt = stmt.where(func.lower(LLMModel.tier) == tier.strip().lower())
+        if evaluation_status:
+            stmt = stmt.where(func.lower(LLMModel.evaluation_status) == evaluation_status.strip().lower())
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "model_id": row.id,
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "evaluation_status": row.evaluation_status.value if row.evaluation_status else None,
+                "tier": row.tier,
+                "request_count": row.request_count or 0,
+                "fallback_count": row.fallback_count or 0,
+                "success_rate": round((row.request_count - (row.fallback_count or 0)) / max(row.request_count, 1) * 100, 2) if row.request_count else 0,
+            }
+            for row in rows
+        ]
+
+    def get_latency_stats(
+        self,
+        *,
+        provider_slug: str | None = None,
+        model_id: int | None = None,
+    ) -> list[dict]:
+        from packages.infrastructure.db.models.llm_execution import LLMExecution
+        
+        stmt = select(
+            LLMModel.id,
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            func.avg(LLMExecution.latency_ms).label("avg_latency_ms"),
+            func.min(LLMExecution.latency_ms).label("min_latency_ms"),
+            func.max(LLMExecution.latency_ms).label("max_latency_ms"),
+            func.count(LLMExecution.id).label("execution_count"),
+        ).outerjoin(
+            LLMExecution, LLMModel.id == LLMExecution.model_id
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name
+        )
+
+        if provider_slug:
+            stmt = stmt.join(Provider).where(
+                func.lower(Provider.slug) == provider_slug.strip().lower()
+            )
+        if model_id:
+            stmt = stmt.where(LLMModel.id == model_id)
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "model_id": row.id,
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "avg_latency_ms": round(row.avg_latency_ms, 2) if row.avg_latency_ms else None,
+                "min_latency_ms": row.min_latency_ms or None,
+                "max_latency_ms": row.max_latency_ms or None,
+                "execution_count": row.execution_count or 0,
+            }
+            for row in rows
+        ]
+
+    def get_feedback_stats(
+        self,
+        *,
+        provider_slug: str | None = None,
+        model_id: int | None = None,
+    ) -> list[dict]:
+        from packages.infrastructure.db.models.llm_feedback import LLMFeedback
+        
+        stmt = select(
+            LLMModel.id,
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            func.avg(LLMFeedback.rating).label("avg_rating"),
+            func.count(LLMFeedback.id).label("feedback_count"),
+        ).outerjoin(
+            LLMFeedback, LLMModel.id == LLMFeedback.model_id
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name
+        )
+
+        if provider_slug:
+            stmt = stmt.join(Provider).where(
+                func.lower(Provider.slug) == provider_slug.strip().lower()
+            )
+        if model_id:
+            stmt = stmt.where(LLMModel.id == model_id)
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "model_id": row.id,
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "avg_rating": round(row.avg_rating, 2) if row.avg_rating else None,
+                "feedback_count": row.feedback_count or 0,
+            }
+            for row in rows
+        ]
+
+    def get_trending_models(
+        self,
+        *,
+        days: int = 7,
+        limit: int = 10,
+    ) -> list[dict]:
+        from packages.infrastructure.db.models.llm_request import LLMRequest
+        from datetime import timedelta
+        
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        stmt = select(
+            LLMModel.id,
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            LLMModel.tier,
+            func.count(LLMRequest.id).label("request_count"),
+        ).join(
+            LLMRequest, LLMModel.id == LLMRequest.selected_model_id
+        ).where(
+            LLMRequest.created_at >= cutoff_date
+        ).group_by(
+            LLMModel.id, LLMModel.routing_key, LLMModel.display_name, LLMModel.tier
+        ).order_by(func.count(LLMRequest.id).desc()).limit(limit)
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "model_id": row.id,
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "tier": row.tier,
+                "request_count": row.request_count,
+                "period_days": days,
+            }
+            for row in rows
+        ]
+
+    def get_session_analytics(
+        self,
+        *,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> dict:
+        from packages.infrastructure.db.models.llm_request import LLMRequest
+        
+        stmt = select(
+            LLMRequest.session_id,
+            func.count(LLMRequest.id).label("request_count"),
+            func.min(LLMRequest.created_at).label("first_request"),
+            func.max(LLMRequest.created_at).label("last_request"),
+        ).where(
+            LLMRequest.session_id.isnot(None)
+        )
+
+        if from_date:
+            stmt = stmt.where(LLMRequest.created_at >= from_date)
+        if to_date:
+            stmt = stmt.where(LLMRequest.created_at <= to_date)
+
+        stmt = stmt.group_by(LLMRequest.session_id)
+
+        rows = self.session.exec(stmt).all()
+        
+        session_durations = []
+        prompts_per_session = []
+        
+        for row in rows:
+            if row.first_request and row.last_request:
+                duration_seconds = (row.last_request - row.first_request).total_seconds()
+                session_durations.append(duration_seconds)
+            prompts_per_session.append(row.request_count)
+        
+        avg_duration = sum(session_durations) / len(session_durations) if session_durations else 0
+        avg_prompts = sum(prompts_per_session) / len(prompts_per_session) if prompts_per_session else 0
+        
+        return {
+            "total_sessions": len(rows),
+            "avg_session_duration_seconds": round(avg_duration, 2),
+            "avg_prompts_per_session": round(avg_prompts, 2),
+            "total_requests": sum(prompts_per_session),
+        }
+
+    def get_error_breakdown(
+        self,
+        *,
+        provider_slug: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> list[dict]:
+        from packages.infrastructure.db.models.llm_execution import LLMExecution
+        
+        stmt = select(
+            LLMModel.routing_key,
+            LLMModel.display_name,
+            Provider.slug.label("provider"),
+            LLMExecution.error,
+            func.count(LLMExecution.id).label("error_count"),
+        ).join(
+            LLMExecution, LLMModel.id == LLMExecution.model_id
+        ).join(
+            Provider, LLMModel.provider_id == Provider.id
+        ).where(
+            LLMExecution.success == False,
+            LLMExecution.error.isnot(None)
+        )
+
+        if from_date:
+            stmt = stmt.where(LLMExecution.created_at >= from_date)
+        if to_date:
+            stmt = stmt.where(LLMExecution.created_at <= to_date)
+        if provider_slug:
+            stmt = stmt.where(func.lower(Provider.slug) == provider_slug.strip().lower())
+
+        stmt = stmt.group_by(
+            LLMModel.routing_key, LLMModel.display_name, Provider.slug, LLMExecution.error
+        ).order_by(func.count(LLMExecution.id).desc()).limit(50)
+
+        rows = self.session.exec(stmt).all()
+        return [
+            {
+                "routing_key": row.routing_key,
+                "display_name": row.display_name,
+                "provider": row.provider,
+                "error": row.error,
+                "error_count": row.error_count,
+            }
+            for row in rows
+        ]
+
+    def get_cost_aggregate(
+        self,
+        *,
+        provider_slug: str | None = None,
+        tier: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> dict:
+        from packages.infrastructure.db.models.llm_execution import LLMExecution
+        
+        stmt = select(
+            Provider.slug,
+            func.sum(LLMExecution.input_tokens).label("total_input_tokens"),
+            func.sum(LLMExecution.output_tokens).label("total_output_tokens"),
+            func.sum(LLMExecution.cost).label("total_cost"),
+            func.count(LLMExecution.id).label("execution_count"),
+        ).select_from(
+            LLMExecution
+        ).join(
+            LLMModel, LLMExecution.model_id == LLMModel.id
+        ).join(
+            Provider, LLMModel.provider_id == Provider.id
+        )
+
+        if provider_slug:
+            stmt = stmt.where(func.lower(Provider.slug) == provider_slug.strip().lower())
+        if tier:
+            stmt = stmt.where(func.lower(LLMModel.tier) == tier.strip().lower())
+        if from_date:
+            stmt = stmt.where(LLMExecution.created_at >= from_date)
+        if to_date:
+            stmt = stmt.where(LLMExecution.created_at <= to_date)
+
+        stmt = stmt.group_by(Provider.slug)
+
+        rows = self.session.exec(stmt).all()
+        
+        total_input = sum(row.total_input_tokens or 0 for row in rows)
+        total_output = sum(row.total_output_tokens or 0 for row in rows)
+        total_cost = sum(row.total_cost or 0 for row in rows)
+        
+        return {
+            "by_provider": [
+                {
+                    "provider": row.slug,
+                    "input_tokens": row.total_input_tokens or 0,
+                    "output_tokens": row.total_output_tokens or 0,
+                    "total_cost": round(row.total_cost or 0, 4),
+                    "execution_count": row.execution_count or 0,
+                }
+                for row in rows
+            ],
+            "total_input_tokens": total_input,
+            "total_output_tokens": total_output,
+            "total_cost": round(total_cost, 4),
+            "total_executions": sum(row.execution_count or 0 for row in rows),
+        }
 
     def replace_model_capabilities(self, *, model_id: int, capabilities: set[Capability]) -> None:
         self.session.exec(delete(LLMModelCapability).where(LLMModelCapability.model_id == model_id))

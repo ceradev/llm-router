@@ -20,7 +20,7 @@ export function AppBackgrounds({ phase }: Readonly<Props>) {
   const [lowEndMobile, setLowEndMobile] = useState(false)
   const colorScheme = theme === "dark" ? "dark" : "light"
 
-  const t = reduceMotion ? { duration: 0 } : { duration: 0.55, ease: "easeInOut" }
+  const t = reduceMotion ? { duration: 0 } : { duration: 0 }
   const showLoading = phase === "analyzing"
   const lowEndFallbackApplies = lowEndMobile && !hasExplicitPreference
   const useStaticBackground = reduceMotion || lowEndFallbackApplies
@@ -61,7 +61,7 @@ export function AppBackgrounds({ phase }: Readonly<Props>) {
         {useStaticBackground ? (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(59,130,246,0.22)_0%,rgba(59,130,246,0)_40%),radial-gradient(circle_at_82%_14%,rgba(14,165,233,0.18)_0%,rgba(14,165,233,0)_38%),linear-gradient(180deg,var(--bg-canvas)_0%,var(--bg-canvas-alt)_100%)]" />
         ) : (
-          <ShaderWavesBackground active={!showLoading} />
+          <ShaderWavesBackground />
         )}
       </motion.div>
 

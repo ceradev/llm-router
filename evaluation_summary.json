@@ -1,0 +1,10 @@
+{
+  "export_date": "2026-04-09",
+  "model_stats": {
+    "cataloged": 18,
+    "verified": 205,
+    "rejected": 129,
+    "total": 352
+  },
+  "summary": "Modelo de evaluación completado. 352 modelos total, 205 verificados, 129 rechazados, 18 catalogados pendientes de evaluación."
+}

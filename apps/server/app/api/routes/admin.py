@@ -275,6 +275,171 @@ def list_admin_models(
     ]
 
 
+@router.get("/models/stats")
+def get_models_stats(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None, description="Filter by provider slug"),
+    tier: str | None = Query(None, description="Filter by tier (premium/alternative)"),
+    available: bool | None = Query(None, description="Filter by availability"),
+) -> dict[str, int]:
+    return ModelRepository(session).count_models_by_evaluation_status(
+        provider_slug=provider,
+        tier=tier,
+        is_available=available,
+    )
+
+
+@router.get("/models/usage")
+def get_models_usage(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None),
+    tier: str | None = Query(None),
+    evaluation_status: str | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+) -> list[dict]:
+    from datetime import datetime, timezone
+    from_dt = datetime.combine(from_date, datetime.min.time()) if from_date else None
+    to_dt = datetime.combine(to_date, datetime.max.time()) if to_date else None
+    if from_dt:
+        from_dt = from_dt.replace(tzinfo=timezone.utc)
+    if to_dt:
+        to_dt = to_dt.replace(tzinfo=timezone.utc)
+    return ModelRepository(session).get_model_usage_stats(
+        provider_slug=provider,
+        tier=tier,
+        evaluation_status=evaluation_status,
+        from_date=from_dt,
+        to_date=to_dt,
+    )
+
+
+@router.get("/models/benchmark-stats")
+def get_models_benchmark(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None),
+    model_id: int | None = Query(None),
+) -> list[dict]:
+    return ModelRepository(session).get_benchmark_stats(
+        provider_slug=provider,
+        model_id=model_id,
+    )
+
+
+@router.get("/providers/overview")
+def get_providers_overview(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> list[dict]:
+    return ModelRepository(session).get_providers_overview()
+
+
+@router.get("/costs/aggregate")
+def get_costs_aggregate(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None),
+    tier: str | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+) -> dict:
+    from datetime import datetime, timezone
+    from_dt = datetime.combine(from_date, datetime.min.time()) if from_date else None
+    to_dt = datetime.combine(to_date, datetime.max.time()) if to_date else None
+    if from_dt:
+        from_dt = from_dt.replace(tzinfo=timezone.utc)
+    if to_dt:
+        to_dt = to_dt.replace(tzinfo=timezone.utc)
+    return ModelRepository(session).get_cost_aggregate(
+        provider_slug=provider,
+        tier=tier,
+        from_date=from_dt,
+        to_date=to_dt,
+    )
+
+
+@router.get("/models/latency")
+def get_latency_stats(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None),
+    model_id: int | None = Query(None),
+) -> list[dict]:
+    return ModelRepository(session).get_latency_stats(
+        provider_slug=provider,
+        model_id=model_id,
+    )
+
+
+@router.get("/models/feedback")
+def get_feedback_stats(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None),
+    model_id: int | None = Query(None),
+) -> list[dict]:
+    return ModelRepository(session).get_feedback_stats(
+        provider_slug=provider,
+        model_id=model_id,
+    )
+
+
+@router.get("/models/trending")
+def get_trending_models(
+    session: Annotated[Session, Depends(get_db_session)],
+    days: int = Query(7, ge=1, le=90),
+    limit: int = Query(10, ge=1, le=100),
+) -> list[dict]:
+    return ModelRepository(session).get_trending_models(
+        days=days,
+        limit=limit,
+    )
+
+
+@router.get("/analytics/sessions")
+def get_session_analytics(
+    session: Annotated[Session, Depends(get_db_session)],
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+) -> dict:
+    from datetime import datetime, timezone
+    from_dt = datetime.combine(from_date, datetime.min.time()) if from_date else None
+    to_dt = datetime.combine(to_date, datetime.max.time()) if to_date else None
+    if from_dt:
+        from_dt = from_dt.replace(tzinfo=timezone.utc)
+    if to_dt:
+        to_dt = to_dt.replace(tzinfo=timezone.utc)
+    return ModelRepository(session).get_session_analytics(
+        from_date=from_dt,
+        to_date=to_dt,
+    )
+
+
+@router.get("/errors/breakdown")
+def get_error_breakdown(
+    session: Annotated[Session, Depends(get_db_session)],
+    provider: str | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+) -> list[dict]:
+    from datetime import datetime, timezone
+    from_dt = datetime.combine(from_date, datetime.min.time()) if from_date else None
+    to_dt = datetime.combine(to_date, datetime.max.time()) if to_date else None
+    if from_dt:
+        from_dt = from_dt.replace(tzinfo=timezone.utc)
+    if to_dt:
+        to_dt = to_dt.replace(tzinfo=timezone.utc)
+    return ModelRepository(session).get_error_breakdown(
+        provider_slug=provider,
+        from_date=from_dt,
+        to_date=to_dt,
+    )
+
+
+@router.get("/models/comparison")
+def get_model_comparison(
+    session: Annotated[Session, Depends(get_db_session)],
+    limit: int = Query(10, ge=1, le=100),
+) -> dict:
+    return ModelRepository(session).get_model_comparison(limit=limit)
+
+
 @router.get("/models/{routing_key:path}")
 def get_admin_model_detail(
     routing_key: str,

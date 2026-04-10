@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { useI18n } from "@/contexts/I18nContext"
 
 type Props = {
@@ -5,7 +6,7 @@ type Props = {
   setPrompt: (v: string) => void
 }
 
-export function HeroPromptField({ prompt, setPrompt }: Readonly<Props>) {
+export const HeroPromptField = memo(function HeroPromptField({ prompt, setPrompt }: Readonly<Props>) {
   const { t } = useI18n()
 
   return (
@@ -23,5 +24,5 @@ export function HeroPromptField({ prompt, setPrompt }: Readonly<Props>) {
       />
     </div>
   )
-}
+})
 

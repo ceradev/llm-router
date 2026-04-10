@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { ShaderGradient, ShaderGradientCanvas } from "@shadergradient/react"
 
 export type ShaderWavesSceneProps = {
@@ -28,7 +29,7 @@ const SCHEME = {
 /**
  * WebGL scene — loaded only via dynamic import from ShaderWavesBackground.
  */
-export function ShaderWavesScene({
+export const ShaderWavesScene = memo(function ShaderWavesScene({
   animate,
   colorScheme,
 }: Readonly<ShaderWavesSceneProps>) {
@@ -38,13 +39,9 @@ export function ShaderWavesScene({
     <ShaderGradientCanvas
       className="absolute inset-0 h-full w-full"
       style={{ position: "absolute", inset: 0 }}
-      // Higher pixel density is noticeably more expensive (esp. during scroll / layout work).
-      // Keep it at 1 for smoother interactions on more devices.
       pixelDensity={1}
       fov={45}
       pointerEvents="none"
-      lazyLoad
-      threshold={0}
     >
       <ShaderGradient
         control="props"
@@ -66,5 +63,5 @@ export function ShaderWavesScene({
       />
     </ShaderGradientCanvas>
   )
-}
+})
 
