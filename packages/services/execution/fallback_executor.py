@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import replace
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from packages.domain.gateway import (
@@ -13,6 +14,9 @@ from packages.domain.gateway import (
     ScoredCandidate,
 )
 from packages.infrastructure.providers.base import ProviderAdapter, ProviderError
+
+if TYPE_CHECKING:
+    from packages.infrastructure.db.repositories.health_repository import HealthRepository
 
 
 class RoutingExhaustedError(RuntimeError):
@@ -38,10 +42,14 @@ class FallbackExecutor:
         *,
         max_total_attempts: int = 8,
         max_failures_per_model: int = 1,
+        health_repository: HealthRepository | None = None,
+        prefer_direct: bool = True,
     ) -> None:
         self.providers = providers
         self.max_total_attempts = max(1, int(max_total_attempts))
         self.max_failures_per_model = max(1, int(max_failures_per_model))
+        self.health_repository = health_repository
+        self.prefer_direct = prefer_direct
 
     def run(
         self,
@@ -59,14 +67,23 @@ class FallbackExecutor:
             if failures_by_model.get(model.model_id, 0) >= self.max_failures_per_model:
                 continue
 
-            provider = self.providers.get(model.provider) or self.providers["openrouter"]
+            # Selection logic based on prefer_direct
+            provider_key = model.provider
+            if self.prefer_direct:
+                if provider_key not in self.providers:
+                    provider_key = "openrouter"
+            else:
+                provider_key = "openrouter"
+
+            provider = self.providers.get(provider_key) or self.providers["openrouter"]
+
             t0 = time.perf_counter()
             try:
                 response = provider.generate(request, model)
                 elapsed_ms = int((time.perf_counter() - t0) * 1000)
                 latency = response.latency_ms if response.latency_ms is not None else elapsed_ms
                 attempt = InvocationAttempt(
-                    provider=model.provider,
+                    provider=provider_key,
                     model_id=model.model_id,
                     status="success",
                     detail="Request completed",
@@ -75,13 +92,19 @@ class FallbackExecutor:
                 attempts.append(attempt)
                 if on_attempt is not None:
                     on_attempt(attempt)
+
+                if self.health_repository is not None:
+                    db_id = _db_id_for_model(model.model_id, decision.scored_candidates)
+                    if db_id is not None:
+                        self.health_repository.record_success(model_id=db_id)
+
                 merged = replace(response, latency_ms=latency)
                 return FallbackExecutionOutcome(response=merged, attempts=attempts)
             except ProviderError as exc:
                 elapsed_ms = int((time.perf_counter() - t0) * 1000)
                 failures_by_model[model.model_id] = failures_by_model.get(model.model_id, 0) + 1
                 attempt = InvocationAttempt(
-                    provider=model.provider,
+                    provider=provider_key,
                     model_id=model.model_id,
                     status="failed",
                     detail=str(exc),
@@ -91,7 +114,19 @@ class FallbackExecutor:
                 if on_attempt is not None:
                     on_attempt(attempt)
 
+                if self.health_repository is not None:
+                    db_id = _db_id_for_model(model.model_id, decision.scored_candidates)
+                    if db_id is not None:
+                        self.health_repository.record_failure(model_id=db_id, reason=str(exc))
+
         raise RoutingExhaustedError(
             attempts=attempts,
             reason=decision.reason,
         )
+
+
+def _db_id_for_model(model_id: str, scored: tuple[ScoredCandidate, ...]) -> int | None:
+    for sc in scored:
+        if sc.model.model_id == model_id:
+            return sc.db_model_id
+    return None

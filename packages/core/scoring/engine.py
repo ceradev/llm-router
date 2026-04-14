@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from packages.domain.gateway import Priority
+from packages.domain.gateway import Intent, Priority
 from packages.domain.models import Capability, ModelProfile
 
 
@@ -20,6 +20,7 @@ class ScoreBreakdown:
     use_case_bonus: float
     provider_bonus: float
     explanation: str
+    jitter_penalty: float = 0.0
 
 
 def _renormalize_weights(
@@ -61,6 +62,17 @@ def _routing_bonuses(
     return capability_bonus, use_case_bonus, provider_bonus
 
 
+def _weights_for_intent(intent: Intent) -> tuple[float, float, float]:
+    """Per-intent weight overrides applied BEFORE priority weights."""
+    if intent == Intent.CODE:
+        return (1.15, 0.85, 0.70)
+    if intent == Intent.ANALYSIS:
+        return (1.10, 0.80, 0.90)
+    if intent == Intent.CREATIVE:
+        return (1.20, 0.70, 0.80)
+    return (1.0, 1.0, 1.0)
+
+
 def compute_model_score(
     *,
     model: ModelProfile,
@@ -74,8 +86,19 @@ def compute_model_score(
     preferred_providers: list[str] | None = None,
     avg_rating: float | None = None,
     ratings_count: int = 0,
+    intent: Intent | None = None,
+    jitter_penalty: float = 0.0,
 ) -> ScoreBreakdown:
     quality_weight, latency_weight, cost_weight = _weights_for_priority(priority)
+
+    if intent is not None:
+        iq, il, ic = _weights_for_intent(intent)
+        quality_weight *= iq
+        latency_weight *= il
+        cost_weight *= ic
+        quality_weight, latency_weight, cost_weight = _renormalize_weights(
+            quality_weight, latency_weight, cost_weight
+        )
 
     if (
         priority == Priority.BALANCED
@@ -103,6 +126,7 @@ def compute_model_score(
     priority_component = float(priority_weight) / 100.0
 
     base_total = quality_component + latency_component + cost_component + priority_component
+    base_total = max(0.0, base_total - jitter_penalty)
 
     confidence_bonus = 0.0
     try:
@@ -131,7 +155,7 @@ def compute_model_score(
     explanation = (
         f"score={adjusted_total:.2f} "
         f"(quality={quality_component:.2f}, latency={latency_component:.2f}, "
-        f"cost={cost_component:.2f}, priority={priority_component:.2f}, "
+        f"cost={cost_component:.2f}, priority={priority_component:.2f}, jitter={jitter_penalty:.2f}, "
         f"routing_bonus={routing_bonus:.2f} "
         f"[capability={capability_bonus:.2f}, use_case={use_case_bonus:.2f}, provider={provider_bonus:.2f}, confidence={confidence_bonus:.2f}], "
         f"feedback_adjustment={model_score_adjustment:.2f}, feedback_factor={adjustment_factor:.2f}, "
@@ -152,6 +176,7 @@ def compute_model_score(
         use_case_bonus=use_case_bonus,
         provider_bonus=provider_bonus,
         explanation=explanation,
+        jitter_penalty=jitter_penalty,
     )
 
 

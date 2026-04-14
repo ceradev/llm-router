@@ -14,6 +14,9 @@ from packages.services.orchestration.orchestrator import GatewayOrchestrator
 from packages.services.prompt_evaluation import PromptEvaluator
 
 
+from packages.infrastructure.config.settings import get_settings
+
+
 def get_db_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
         yield session
@@ -21,15 +24,16 @@ def get_db_session() -> Generator[Session, None, None]:
 
 
 def get_gateway_orchestrator(session: Session) -> GatewayOrchestrator:
-    fallback_registry = ModelRegistry()
+    settings = get_settings()
     model_repository = ModelRepository(session)
     selector = ModelSelector(model_repository=model_repository)
+    provider_clients = build_provider_clients(settings)
 
     return GatewayOrchestrator(
         session=session,
         model_repository=model_repository,
-        fallback_registry=fallback_registry,
+        fallback_registry=provider_clients,
         prompt_evaluator=PromptEvaluator(),
         selector=selector,
-        executor=FallbackExecutor(build_provider_clients()),
+        executor=FallbackExecutor(provider_clients),
     )

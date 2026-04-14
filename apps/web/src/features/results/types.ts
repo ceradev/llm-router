@@ -52,6 +52,7 @@ export type ModelDecision = {
   /** From catalog tier (e.g. OpenRouter sync), not inferred from name */
   isFreeTier?: boolean
   tier?: string
+  health_status?: string
   evaluationStatus?: string
   supportsVision?: boolean
   inputModalities?: string[]

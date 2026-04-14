@@ -4,6 +4,7 @@ import type { CategoryPick } from "@/features/results/types"
 import type { TranslationKey } from "@/i18n/translations"
 import { formatTokensCount } from "../utils"
 import { ModelCapabilityBadges } from "./ModelCapabilityBadges"
+import { TierBadge } from "./TierBadge"
 
 function categoryTitle(
   t: (k: TranslationKey) => string,
@@ -69,7 +70,9 @@ export function CategoryHighlightCard({
       <p className="text-[12px] font-semibold uppercase tracking-wide text-(--text-accent)">
         {categoryTitle(t, pick.kind)}
       </p>
-      <p className="mt-2 truncate text-lg font-semibold text-(--text-primary)">{model.name}</p>
+      <p className="mt-2 truncate text-lg font-semibold text-(--text-primary)">
+        {model.name} <TierBadge tier={model.tier} />
+      </p>
       <p className="truncate text-sm text-(--text-muted)">{model.provider}</p>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--text-muted)">
         <span>Score {formatScoreOutOfTen(model.score)}</span>

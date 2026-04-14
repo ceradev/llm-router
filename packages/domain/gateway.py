@@ -14,6 +14,17 @@ class Priority(str, Enum):
     LOW_LATENCY = "low_latency"
 
 
+class ModelTier(str, Enum):
+    TIER1_VERIFIED = "tier1_verified"
+    TIER2_PROVISIONAL = "tier2_provisional"
+
+
+class HealthState(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    BROKEN = "broken"
+
+
 class Intent(str, Enum):
     GENERAL = "general"
     ANALYSIS = "analysis"
@@ -40,6 +51,7 @@ class GatewayTask:
     temperature: float | None
     max_tokens: int | None
     require_json: bool
+    discovery_mode: bool = False
     simulate_failures: list[str] = field(default_factory=list)
     use_cases: list[str] = field(default_factory=list)
     preferred_providers: list[str] = field(default_factory=list)
@@ -109,6 +121,9 @@ class ScoredCandidate:
     explanation: str
     pros: tuple[str, ...]
     cons: tuple[str, ...]
+    tier: ModelTier = ModelTier.TIER2_PROVISIONAL
+    health_status: HealthState = HealthState.HEALTHY
+    snapshot_latency_p50: float | None = None
     user_rating: float | None = None
     user_rating_count: int = 0
 

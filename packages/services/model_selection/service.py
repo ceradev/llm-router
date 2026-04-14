@@ -3,7 +3,9 @@ from __future__ import annotations
 from packages.core.scoring.engine import ScoreBreakdown, compute_model_score
 from packages.domain.gateway import (
     GatewayTask,
+    HealthState,
     Intent,
+    ModelTier,
     NoModelsAvailableError,
     Priority,
     RoutingDecision,
@@ -11,7 +13,13 @@ from packages.domain.gateway import (
 )
 from packages.domain.models import ModelProfile
 from packages.infrastructure.db.repositories.feedback_repository import FeedbackRepository
-from packages.infrastructure.db.repositories.model_repository import ModelRepository, ModelRoutingRow
+from packages.infrastructure.db.repositories.health_repository import HealthRepository
+from packages.infrastructure.db.repositories.model_repository import (
+    ModelRepository,
+    ModelRoutingRow,
+)
+from packages.infrastructure.db.repositories.snapshot_repository import SnapshotRepository
+from packages.services.model_selection.snapshot_scoring import apply_snapshot_adjustments
 from packages.services.prompt_evaluation.types import PromptEvaluationResult
 
 
@@ -32,8 +40,16 @@ def _pros_cons_for(*, model: ModelProfile, priority: Priority) -> tuple[tuple[st
 
 
 class ModelSelector:
-    def __init__(self, *, model_repository: ModelRepository) -> None:
+    def __init__(
+        self,
+        *,
+        model_repository: ModelRepository,
+        snapshot_repository: SnapshotRepository | None = None,
+        health_repository: HealthRepository | None = None,
+    ) -> None:
         self.model_repository = model_repository
+        self.snapshot_repository = snapshot_repository
+        self.health_repository = health_repository
 
     def build_decision(
         self,
@@ -44,14 +60,14 @@ class ModelSelector:
         require_json: bool | None = None,
     ) -> RoutingDecision:
         effective_json = task.require_json if require_json is None else require_json
-        db_rows, pref_applied, pref_fallback_used, normalized_pref = self._load_candidates(
+        db_rows_with_tiers, pref_applied, pref_fallback_used, normalized_pref = self._load_candidates(
             task=task,
             priority=task.priority,
             require_json=effective_json,
         )
         candidates, scored_candidates, score_breakdowns = self._rank_candidates(
             task=task,
-            rows=db_rows,
+            rows_with_tiers=db_rows_with_tiers,
             priority=task.priority,
             evaluation=evaluation,
         )
@@ -88,13 +104,24 @@ class ModelSelector:
         task: GatewayTask,
         priority: Priority,
         require_json: bool,
-    ) -> tuple[list[ModelRoutingRow], bool, bool, list[str]]:
+    ) -> tuple[list[tuple[ModelRoutingRow, ModelTier]], bool, bool, list[str]]:
         raw = task.preferred_providers
         normalized_pref = [str(p).strip().lower() for p in raw if str(p).strip()]
 
+        def _split_and_filter(rows: list[ModelRoutingRow]) -> list[tuple[ModelRoutingRow, ModelTier]]:
+            broken_ids = self.health_repository.get_broken_model_ids() if self.health_repository else set()
+            available = [r for r in rows if r.db_model_id not in broken_ids]
+            
+            tier1 = [(r, ModelTier.TIER1_VERIFIED) for r in available if r.model.evaluation_status == "verified"]
+            tier2 = [(r, ModelTier.TIER2_PROVISIONAL) for r in available if r.model.evaluation_status != "verified"]
+            
+            if not task.discovery_mode and tier1:
+                return tier1
+            return tier1 + tier2
+
         if not normalized_pref:
             rows = self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
-            return (rows, False, False, [])
+            return (_split_and_filter(rows), False, False, [])
 
         filtered = self.model_repository.list_routing_candidates(
             priority=priority,
@@ -102,30 +129,63 @@ class ModelSelector:
             provider_slugs=normalized_pref,
         )
         if filtered:
-            return (filtered, True, False, normalized_pref)
+            return (_split_and_filter(filtered), True, False, normalized_pref)
 
         # Fallback behavior: if strict filter yields no candidates, use full catalog
         rows = self.model_repository.list_routing_candidates(priority=priority, require_json=require_json)
-        return (rows, False, True, normalized_pref)
+        return (_split_and_filter(rows), False, True, normalized_pref)
 
     def _rank_candidates(
         self,
         *,
         task: GatewayTask,
-        rows: list[ModelRoutingRow],
+        rows_with_tiers: list[tuple[ModelRoutingRow, ModelTier]],
         priority: Priority,
         evaluation: PromptEvaluationResult,
     ) -> tuple[list[ModelProfile], tuple[ScoredCandidate, ...], dict[str, ScoreBreakdown]]:
-        scored: list[tuple[float, ModelProfile, ModelRoutingRow, ScoreBreakdown]] = []
-        model_ids = [row.db_model_id for row in rows]
+        scored: list[tuple[float, ModelProfile, ModelRoutingRow, ModelTier, ScoreBreakdown, float | None]] = []
+        model_ids = [row.db_model_id for row, _ in rows_with_tiers]
         feedback_stats: dict[int, tuple[float | None, int]] = {}
         session = getattr(self.model_repository, "session", None)
         if session is not None:
             feedback_stats = FeedbackRepository(session).get_feedback_stats_by_model_ids(model_ids=model_ids)
-        for row in rows:
+        
+        for row, tier in rows_with_tiers:
             avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
+            
+            # Apply snapshot adjustments if repository available
+            snapshot = None
+            if self.snapshot_repository:
+                snapshot = self.snapshot_repository.get_latest_snapshot(model_id=row.db_model_id)
+            
+            adjustments = apply_snapshot_adjustments(profile=row.model, snapshot=snapshot)
+            
+            # Create adjusted profile for scoring
+            adjusted_profile = ModelProfile(
+                model_id=row.model.model_id,
+                provider=row.model.provider,
+                quality_score=row.model.quality_score,
+                latency_score=int(adjustments.latency_score),
+                cost_score=int(adjustments.cost_score),
+                default_temperature=row.model.default_temperature,
+                capabilities=row.model.capabilities,
+                model_categories=row.model.model_categories,
+                technical_capabilities=row.model.technical_capabilities,
+                verification_scopes=row.model.verification_scopes,
+                supports_tools=row.model.supports_tools,
+                context_window=row.model.context_window,
+                max_output_tokens=row.model.max_output_tokens,
+                tier=row.model.tier,
+                evaluation_status=row.model.evaluation_status,
+                supports_vision=row.model.supports_vision,
+                input_modalities=row.model.input_modalities,
+                output_modalities=row.model.output_modalities,
+                prompt_price=row.model.prompt_price,
+                completion_price=row.model.completion_price,
+            )
+
             breakdown = compute_model_score(
-                model=row.model,
+                model=adjusted_profile,
                 priority=priority,
                 priority_weight=row.priority_weight,
                 complexity_score=evaluation.complexity_score,
@@ -137,16 +197,31 @@ class ModelSelector:
                 avg_rating=avg_rating,
                 ratings_count=ratings_count,
             )
-            scored.append((breakdown.total, row.model, row, breakdown))
+            # Add reliability penalty if snapshot was used
+            final_total = breakdown.total - adjustments.reliability_penalty
+            
+            scored.append((
+                final_total, 
+                row.model, 
+                row, 
+                tier, 
+                breakdown, 
+                snapshot.p50_latency_ms if snapshot else None
+            ))
 
         scored.sort(key=lambda item: (-item[0], item[1].model_id))
-        candidates = [model for _, model, _, _ in scored]
-        score_breakdowns = {model.model_id: breakdown for _, model, _, breakdown in scored}
+        candidates = [model for _, model, _, _, _, _ in scored]
+        score_breakdowns = {model.model_id: breakdown for _, model, _, _, breakdown, _ in scored}
 
         scored_candidates: list[ScoredCandidate] = []
-        for rank, (_, model, row, breakdown) in enumerate(scored, start=1):
+        for rank, (total_score, model, row, tier, breakdown, p50) in enumerate(scored, start=1):
             avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
             pros, cons = _pros_cons_for(model=model, priority=priority)
+            
+            health_status = HealthState.HEALTHY
+            if self.health_repository:
+                health_status = self.health_repository.get_status(model_id=row.db_model_id)
+
             scored_candidates.append(
                 ScoredCandidate(
                     model=model,
@@ -156,11 +231,14 @@ class ModelSelector:
                     quality_score=float(model.quality_score),
                     latency_score=float(model.latency_score),
                     cost_score=float(model.cost_score),
-                    final_score=breakdown.total,
+                    final_score=total_score,
                     model_score_adjustment=breakdown.model_score_adjustment,
                     explanation=breakdown.explanation,
                     pros=pros,
                     cons=cons,
+                    tier=tier,
+                    health_status=health_status,
+                    snapshot_latency_p50=p50,
                     user_rating=avg_rating,
                     user_rating_count=ratings_count,
                 )

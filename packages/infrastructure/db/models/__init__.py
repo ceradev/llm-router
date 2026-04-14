@@ -21,6 +21,8 @@ from packages.infrastructure.db.models.llm_execution import LLMExecution
 from packages.infrastructure.db.models.llm_attempt import LLMAttempt
 from packages.infrastructure.db.models.llm_feedback import LLMFeedback
 from packages.infrastructure.db.models.daily_metrics import DailyMetrics
+from packages.infrastructure.db.models.model_performance_snapshot import ModelPerformanceSnapshot
+from packages.infrastructure.db.models.model_health_status import ModelHealthStatus
 
 __all__ = [
     "LLMAttempt",
@@ -39,4 +41,6 @@ __all__ = [
     "ProviderSyncRun",
     "RequestAnalysis",
     "DailyMetrics",
+    "ModelPerformanceSnapshot",
+    "ModelHealthStatus",
 ]
