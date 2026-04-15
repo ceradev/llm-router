@@ -13,3 +13,4 @@ class PromptEvaluationResult:
     requires_tools: bool
     estimated_tokens: int
     keywords: list[str]
+    estimated_output_tokens: int = 512   # NEW: default completion size estimate

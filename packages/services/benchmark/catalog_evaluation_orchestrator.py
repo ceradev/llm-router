@@ -146,6 +146,9 @@ class CatalogEvaluationOrchestrator:
                 logger.exception("catalog_eval phase=heuristic failed for model_id=%s", model.id)
 
     def _run_live_phase(self, config: CatalogEvaluationConfig, summary: CatalogEvaluationRunSummary) -> None:
+        if config.max_live_benchmarks_per_run <= 0:
+            return
+
         rows = self._session.exec(self._live_rows_stmt(config)).all()
 
         providers: dict[str, list[tuple[LLMModel, Provider]]] = {}
@@ -156,6 +159,8 @@ class CatalogEvaluationOrchestrator:
 
         done = 0
         for provider_slug in sorted(providers.keys()):
+            if config.max_live_benchmarks_per_run > 0 and done >= config.max_live_benchmarks_per_run:
+                break
 
             provider_models = providers[provider_slug]
             logger.info(
@@ -166,6 +171,9 @@ class CatalogEvaluationOrchestrator:
             )
 
             for model, provider in provider_models:
+                if config.max_live_benchmarks_per_run > 0 and done >= config.max_live_benchmarks_per_run:
+                    break
+
                 if not self._provider_ok(provider.slug, config):
                     continue
 

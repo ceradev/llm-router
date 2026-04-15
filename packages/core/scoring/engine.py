@@ -21,6 +21,7 @@ class ScoreBreakdown:
     provider_bonus: float
     explanation: str
     jitter_penalty: float = 0.0
+    health_multiplier: float = 1.0   # NEW: [0.3, 1.0], 1.0 = fully healthy
 
 
 def _renormalize_weights(
@@ -88,6 +89,7 @@ def compute_model_score(
     ratings_count: int = 0,
     intent: Intent | None = None,
     jitter_penalty: float = 0.0,
+    health_multiplier: float = 1.0,   # NEW parameter
 ) -> ScoreBreakdown:
     quality_weight, latency_weight, cost_weight = _weights_for_priority(priority)
 
@@ -125,8 +127,12 @@ def compute_model_score(
     cost_component = float(model.cost_score) * cost_weight
     priority_component = float(priority_weight) / 100.0
 
-    base_total = quality_component + latency_component + cost_component + priority_component
-    base_total = max(0.0, base_total - jitter_penalty)
+    raw_base = quality_component + latency_component + cost_component + priority_component
+    raw_base = max(0.0, raw_base - jitter_penalty)
+
+    # --- NEW: apply health multiplier to base total ---
+    clamped_health = max(0.3, min(1.0, health_multiplier))
+    base_total = raw_base * clamped_health
 
     confidence_bonus = 0.0
     try:
@@ -156,6 +162,7 @@ def compute_model_score(
         f"score={adjusted_total:.2f} "
         f"(quality={quality_component:.2f}, latency={latency_component:.2f}, "
         f"cost={cost_component:.2f}, priority={priority_component:.2f}, jitter={jitter_penalty:.2f}, "
+        f"health_mult={clamped_health:.2f}, "
         f"routing_bonus={routing_bonus:.2f} "
         f"[capability={capability_bonus:.2f}, use_case={use_case_bonus:.2f}, provider={provider_bonus:.2f}, confidence={confidence_bonus:.2f}], "
         f"feedback_adjustment={model_score_adjustment:.2f}, feedback_factor={adjustment_factor:.2f}, "
@@ -165,7 +172,7 @@ def compute_model_score(
 
     return ScoreBreakdown(
         total=adjusted_total,
-        base_total=total_without_feedback,
+        base_total=base_total,
         adjusted_total=adjusted_total,
         model_score_adjustment=model_score_adjustment,
         quality_component=quality_component,
@@ -177,6 +184,7 @@ def compute_model_score(
         provider_bonus=provider_bonus,
         explanation=explanation,
         jitter_penalty=jitter_penalty,
+        health_multiplier=clamped_health,
     )
 
 

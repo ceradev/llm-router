@@ -17,6 +17,14 @@ _CREATIVE_TERMS = frozenset({"write", "story", "post", "creative"})
 _JSON_TERMS = frozenset({"json", "schema", "structured"})
 _TOOL_TERMS = frozenset({"search", "browse", "fetch", "tool"})
 
+# Response depth → expected output token count
+_DEPTH_OUTPUT_TOKENS: dict[str, int] = {
+    "short": 256,
+    "balanced": 512,
+    "detailed": 1024,
+}
+_DEFAULT_OUTPUT_TOKENS = 512
+
 
 def _contains_any(haystack_lower: str, terms: frozenset[str]) -> bool:
     return any(term in haystack_lower for term in terms)
@@ -32,8 +40,26 @@ def _classify_intent(lowered: str) -> str:
     return "general"
 
 
+def _estimate_input_tokens(normalized: str, word_count: int) -> int:
+    """Hybrid token estimator.
+
+    For short prompts (<10 words) the word-multiplier is unstable; fall back
+    to char-based BPE approximation (avg 4 chars/token for English).
+    For longer prompts blend both signals for higher accuracy.
+    Decision: simple, dependency-free, <0.5ms.
+    """
+    word_estimate = max(1, int(word_count * 1.3))
+    char_estimate = max(1, int(len(normalized) / 4.0))
+    if word_count < 10:
+        return char_estimate
+    # Weighted blend: 60% word-based, 40% char-based
+    return max(1, int(0.6 * word_estimate + 0.4 * char_estimate))
+
+
 class PromptEvaluator:
-    def evaluate(self, prompt: str) -> PromptEvaluationResult:
+    def evaluate(
+        self, prompt: str, *, response_depth: str = "balanced"
+    ) -> PromptEvaluationResult:
         normalized = normalize_prompt(prompt)
         lowered = normalized.lower()
         words = tokenize_words(normalized)
@@ -54,8 +80,10 @@ class PromptEvaluator:
         requires_tools = _contains_any(lowered, _TOOL_TERMS)
         requires_reasoning = intent == "analysis" or complexity_score > 0.6
 
-        word_count = len(words)
-        estimated_tokens = max(1, int(word_count * 1.3))
+        estimated_tokens = _estimate_input_tokens(normalized, len(words))
+        estimated_output_tokens = _DEPTH_OUTPUT_TOKENS.get(
+            response_depth, _DEFAULT_OUTPUT_TOKENS
+        )
 
         return PromptEvaluationResult(
             intent=intent,
@@ -66,4 +94,5 @@ class PromptEvaluator:
             requires_tools=requires_tools,
             estimated_tokens=estimated_tokens,
             keywords=keywords,
+            estimated_output_tokens=estimated_output_tokens,
         )

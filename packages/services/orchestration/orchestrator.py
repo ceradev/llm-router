@@ -27,9 +27,11 @@ from packages.infrastructure.db.repositories.metrics_repository import MetricsRe
 from packages.infrastructure.db.repositories.model_repository import ModelRepository
 from packages.infrastructure.config.settings import get_settings
 from packages.infrastructure.db.repositories.request_repository import RequestRepository
+from packages.services.budget.controller import BudgetConstraint, BudgetController
 from packages.services.execution.fallback_executor import FallbackExecutor, RoutingExhaustedError
 from packages.services.model_selection.service import ModelSelector
 from packages.services.prompt_evaluation import PromptEvaluator, PromptEvaluationResult
+from packages.services.real_time_observer import RealTimeObserver
 from packages.services.sync.openrouter_sync_service import OpenRouterSyncService
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,85 @@ def _extra_skills_from_evaluation(evaluation: PromptEvaluationResult) -> list[st
     if evaluation.requires_reasoning:
         tags.append("reasoning")
     return tags
+
+
+def _apply_health_to_candidates(
+    scored_candidates: tuple[ScoredCandidate, ...],
+    observer: RealTimeObserver,
+) -> tuple[ScoredCandidate, ...]:
+    """Re-weight ScoredCandidates with real-time health multipliers.
+
+    Fetches a single health snapshot for all candidate routing keys, then
+    builds new ScoredCandidate instances with adjusted final_score.
+    Re-sorts by new final_score to maintain correct rank order.
+    """
+    routing_keys = [sc.model.model_id for sc in scored_candidates]
+    snapshot = observer.get_health_snapshot(routing_keys=routing_keys)
+
+    if not snapshot.signals:
+        # No recent data → no adjustment needed, skip re-sort
+        return scored_candidates
+
+    adjusted: list[tuple[float, ScoredCandidate]] = []
+    for sc in scored_candidates:
+        multiplier = snapshot.get_multiplier(sc.model.model_id)
+        if abs(multiplier - 1.0) < 1e-6:
+            adjusted.append((sc.final_score, sc))
+        else:
+            # Apply health to final_score proportionally
+            new_score = sc.final_score * multiplier
+            # Rebuild with updated explanation note
+            updated_explanation = (
+                f"{sc.explanation} [health_mult={multiplier:.2f} → score={new_score:.2f}]"
+            )
+            new_sc = ScoredCandidate(
+                model=sc.model,
+                priority_weight=sc.priority_weight,
+                db_model_id=sc.db_model_id,
+                rank=sc.rank,             # will be fixed after sort
+                quality_score=sc.quality_score,
+                latency_score=sc.latency_score,
+                cost_score=sc.cost_score,
+                final_score=new_score,
+                model_score_adjustment=sc.model_score_adjustment,
+                explanation=updated_explanation,
+                pros=sc.pros,
+                cons=sc.cons,
+                tier=sc.tier,
+                health_status=sc.health_status,
+                snapshot_latency_p50=sc.snapshot_latency_p50,
+                user_rating=sc.user_rating,
+                user_rating_count=sc.user_rating_count,
+            )
+            adjusted.append((new_score, new_sc))
+
+    adjusted.sort(key=lambda x: (-x[0], x[1].model.model_id))
+
+    # Fix rank numbers after re-sort
+    reranked: list[ScoredCandidate] = []
+    for new_rank, (_, sc) in enumerate(adjusted, start=1):
+        reranked.append(
+            ScoredCandidate(
+                model=sc.model,
+                priority_weight=sc.priority_weight,
+                db_model_id=sc.db_model_id,
+                rank=new_rank,
+                quality_score=sc.quality_score,
+                latency_score=sc.latency_score,
+                cost_score=sc.cost_score,
+                final_score=sc.final_score,
+                model_score_adjustment=sc.model_score_adjustment,
+                explanation=sc.explanation,
+                pros=sc.pros,
+                cons=sc.cons,
+                tier=sc.tier,
+                health_status=sc.health_status,
+                snapshot_latency_p50=sc.snapshot_latency_p50,
+                user_rating=sc.user_rating,
+                user_rating_count=sc.user_rating_count,
+            )
+        )
+    return tuple(reranked)
 
 
 class GatewayOrchestrator:
@@ -73,6 +154,8 @@ class GatewayOrchestrator:
         self._execution_repo = ExecutionRepository(session)
         self._attempt_repo = AttemptRepository(session)
         self._metrics_repo = MetricsRepository(session)
+        self._budget_controller = BudgetController()
+        self._observer = RealTimeObserver(session)
 
     def _maybe_sync_openrouter_catalog(self) -> None:
         settings = get_settings()
@@ -94,7 +177,9 @@ class GatewayOrchestrator:
         return self.fallback_registry.list_models()
 
     def execute(self, task: GatewayTask, *, session_id: str | None = None) -> GatewayExecutionResult:
-        evaluation = self.prompt_evaluator.evaluate(task.prompt)
+        evaluation = self.prompt_evaluator.evaluate(
+            task.prompt, response_depth=task.response_depth
+        )
         intent = intent_from_evaluation_string(evaluation.intent)
         effective_require_json = task.require_json or evaluation.requires_json
         effective_max_tokens = (
@@ -105,13 +190,15 @@ class GatewayOrchestrator:
 
         logger.info(
             "prompt_evaluation intent=%s complexity=%.3f requires_code=%s requires_json=%s "
-            "requires_tools=%s requires_reasoning=%s",
+            "requires_tools=%s requires_reasoning=%s estimated_tokens=%d estimated_output_tokens=%d",
             evaluation.intent,
             evaluation.complexity_score,
             evaluation.requires_code,
             evaluation.requires_json,
             evaluation.requires_tools,
             evaluation.requires_reasoning,
+            evaluation.estimated_tokens,
+            evaluation.estimated_output_tokens,
         )
 
         llm_req = self._request_repo.create_request(
@@ -148,6 +235,40 @@ class GatewayOrchestrator:
             require_json=effective_require_json,
         )
 
+        # --- NEW: real-time health re-ranking ---
+        health_adjusted_candidates = _apply_health_to_candidates(
+            decision.scored_candidates,
+            self._observer,
+        )
+
+        # --- NEW: budget filtering ---
+        budget_constraint = BudgetConstraint(
+            max_estimated_cost_usd=getattr(task, "max_cost_usd", None),
+            estimated_input_tokens=evaluation.estimated_tokens,
+            estimated_output_tokens=evaluation.estimated_output_tokens,
+        )
+        budget_filtered = self._budget_controller.filter_candidates(
+            health_adjusted_candidates, budget_constraint
+        )
+        if len(budget_filtered) < len(health_adjusted_candidates):
+            logger.info(
+                "budget_filter removed %d candidates (limit=%.4f USD)",
+                len(health_adjusted_candidates) - len(budget_filtered),
+                budget_constraint.max_estimated_cost_usd,
+            )
+
+        # Rebuild RoutingDecision with budget-filtered + health-adjusted candidates
+        final_decision = RoutingDecision(
+            intent=decision.intent,
+            reason=decision.reason,
+            applied_temperature=decision.applied_temperature,
+            candidates=[sc.model for sc in budget_filtered],
+            scored_candidates=budget_filtered,
+            preferred_providers=decision.preferred_providers,
+            preferred_providers_applied=decision.preferred_providers_applied,
+            preferred_providers_fallback_used=decision.preferred_providers_fallback_used,
+        )
+
         evaluations = [
             ModelEvaluation(
                 request_id=llm_req.id,
@@ -161,13 +282,13 @@ class GatewayOrchestrator:
                 pros=list(sc.pros) if sc.pros else None,
                 cons=list(sc.cons) if sc.cons else None,
             )
-            for sc in decision.scored_candidates
+            for sc in final_decision.scored_candidates
         ]
         self._eval_repo.bulk_insert_evaluations(evaluations)
 
         routed = RoutedRequest(
             prompt=task.prompt,
-            temperature=decision.applied_temperature,
+            temperature=final_decision.applied_temperature,
             max_tokens=effective_max_tokens,
             require_json=effective_require_json,
             simulate_failures=set(task.simulate_failures),
@@ -191,7 +312,7 @@ class GatewayOrchestrator:
         try:
             outcome = self.executor.run(
                 request=routed,
-                decision=decision,
+                decision=final_decision,
                 on_attempt=on_attempt,
             )
         except RoutingExhaustedError as exc:
@@ -204,7 +325,7 @@ class GatewayOrchestrator:
                 exc.attempts,
                 exc.reason,
                 request_id=llm_req.id,
-                scored_candidates=decision.scored_candidates,
+                scored_candidates=final_decision.scored_candidates,
             ) from exc
 
         win_id = self.model_repository.get_model_id_by_routing_key(outcome.response.model_id)
@@ -223,7 +344,7 @@ class GatewayOrchestrator:
         )
 
         fallback_used = len(outcome.attempts) > 1 or (
-            bool(decision.candidates) and outcome.response.model_id != decision.candidates[0].model_id
+            bool(final_decision.candidates) and outcome.response.model_id != final_decision.candidates[0].model_id
         )
         self._request_repo.update_request_outcome(
             llm_req.id,
@@ -237,12 +358,12 @@ class GatewayOrchestrator:
             latency_ms=outcome.response.latency_ms or 0,
         )
 
-        ranking_summary = _build_ranking_summary(decision, priority=task.priority)
+        ranking_summary = _build_ranking_summary(final_decision, priority=task.priority)
 
         return GatewayExecutionResult(
             request_id=llm_req.id,
             response=outcome.response,
-            decision=decision,
+            decision=final_decision,
             attempts=outcome.attempts,
             fallback_used=fallback_used,
             ranking_summary=ranking_summary,

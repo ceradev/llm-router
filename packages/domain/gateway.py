@@ -51,6 +51,7 @@ class GatewayTask:
     temperature: float | None
     max_tokens: int | None
     require_json: bool
+    max_cost_usd: float | None = None
     discovery_mode: bool = False
     simulate_failures: list[str] = field(default_factory=list)
     use_cases: list[str] = field(default_factory=list)

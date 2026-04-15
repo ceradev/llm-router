@@ -44,6 +44,16 @@ def test_scored_candidate_tier_defaults_to_tier2() -> None:
     assert candidate.health_status == HealthState.HEALTHY
     assert candidate.snapshot_latency_p50 is None
 
+def test_gateway_task_has_max_cost_usd_default_none() -> None:
+    task = GatewayTask(
+        prompt="hello",
+        priority=Priority.BALANCED,
+        temperature=None,
+        max_tokens=None,
+        require_json=False,
+    )
+    assert task.max_cost_usd is None
+
 def test_model_tier_verified_enum_value() -> None:
     assert ModelTier.TIER1_VERIFIED.value == "tier1_verified"
 
