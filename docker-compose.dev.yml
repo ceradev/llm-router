@@ -1,0 +1,54 @@
+# Dev overrides only — does NOT include postgres.
+# Always merge with the base file so DATABASE_URL host `postgres` resolves:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# Do not run this file alone: `docker compose -f docker-compose.dev.yml up` has no DB service.
+
+services:
+  backend:
+    restart: "no"
+    ports: !override
+      - "8000:8000"
+    volumes:
+      - ./:/app
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      SYNC_API_KEY: ${SYNC_API_KEY:-dev-sync-key}
+      OPENROUTER_SYNC_ON_STARTUP: "false"
+      OPENROUTER_ENABLE_PERIODIC_SYNC: "false"
+      CATALOG_EVALUATION_AFTER_OPENROUTER_SYNC: "false"
+      CATALOG_EVALUATION_ON_STARTUP: "false"
+      CATALOG_EVALUATION_ENABLE_PERIODIC: "false"
+    command:
+      - sh
+      - -c
+      - |
+        echo '⏳ Waiting for database...'
+        until python3 -c 'import psycopg, os; psycopg.connect(os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://"))'; do
+          echo 'DB not ready...'
+          sleep 2
+        done
+        echo '📦 Running migrations...'
+        alembic -c /app/alembic.ini upgrade head
+        echo '🛠️ Starting API in dev reload mode...'
+        uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/apps/server --reload-dir /app/packages
+
+  frontend:
+    restart: "no"
+    ports: !override
+      - "4321:4321"
+    working_dir: /app/apps/web
+    volumes:
+      - ./:/app
+    environment:
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8000}
+      PUBLIC_ADMIN_API_KEY: ${PUBLIC_ADMIN_API_KEY:-}
+      CHOKIDAR_USEPOLLING: "true"
+    command:
+      - sh
+      - -c
+      - |
+        bun install --frozen-lockfile
+        bun x astro dev --host 0.0.0.0 --port 4321

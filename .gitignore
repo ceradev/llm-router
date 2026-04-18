@@ -46,3 +46,11 @@ temp/
 Thumbs.db
 .vscode/
 .idea/
+
+# Docker (except tracked compose files)
+docker-compose.*.yml
+docker-compose.*.yaml
+!docker-compose.yml
+!docker-compose.prod.yml
+!docker-compose.dev.yml
+*.dockerfile
