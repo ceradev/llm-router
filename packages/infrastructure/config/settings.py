@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     openrouter_enable_periodic_sync: bool = False
     openrouter_sync_interval_hours: float = 6.0
     admin_api_key: str | None = None
+    sync_api_key: str | None = None
 
     catalog_evaluation_after_openrouter_sync: bool = False
     catalog_evaluation_on_startup: bool = False
