@@ -27,6 +27,10 @@ router = APIRouter(prefix="/v1", tags=["gateway"])
 logger = logging.getLogger(__name__)
 
 
+def _get_request_orchestrator(session: Session) -> GatewayOrchestrator:
+    return get_gateway_orchestrator(session)
+
+
 def _execute_gateway_completion(
     *,
     orchestrator: GatewayOrchestrator,
@@ -68,7 +72,7 @@ def _execute_gateway_completion(
 def list_models(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> list[ModelSummaryResponse]:
-    orchestrator = get_gateway_orchestrator(session)
+    orchestrator = _get_request_orchestrator(session)
     return to_model_summary_list(orchestrator.list_models())
 
 
@@ -85,7 +89,7 @@ def create_completion_simple(
     session: Annotated[Session, Depends(get_db_session)],
     x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
 ) -> GatewayResponse:
-    orchestrator = get_gateway_orchestrator(session)
+    orchestrator = _get_request_orchestrator(session)
     task = build_default_gateway_task(prompt=payload.prompt)
     return _execute_gateway_completion(
         orchestrator=orchestrator,
@@ -112,7 +116,7 @@ def create_completion_advanced(
     session: Annotated[Session, Depends(get_db_session)],
     x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
 ) -> GatewayResponse:
-    orchestrator = get_gateway_orchestrator(session)
+    orchestrator = _get_request_orchestrator(session)
     task = GatewayTask(
         prompt=payload.prompt,
         priority=payload.priority,

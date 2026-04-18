@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Protocol, cast
 
 from sqlmodel import Session
 
@@ -31,12 +32,15 @@ from packages.services.budget.controller import BudgetConstraint, BudgetControll
 from packages.services.execution.fallback_executor import FallbackExecutor, RoutingExhaustedError
 from packages.services.model_selection.service import ModelSelector
 from packages.services.prompt_evaluation import PromptEvaluator, PromptEvaluationResult
-from packages.services.real_time_observer import RealTimeObserver
 from packages.services.sync.openrouter_sync_service import OpenRouterSyncService
 
 logger = logging.getLogger(__name__)
 
 _DEPTH_TOKENS = {"short": 256, "balanced": 512, "detailed": 1024}
+
+
+class FallbackModelRegistry(Protocol):
+    def list_models(self) -> list[ModelProfile]: ...
 
 
 def _extra_skills_from_evaluation(evaluation: PromptEvaluationResult) -> list[str]:
@@ -52,92 +56,13 @@ def _extra_skills_from_evaluation(evaluation: PromptEvaluationResult) -> list[st
     return tags
 
 
-def _apply_health_to_candidates(
-    scored_candidates: tuple[ScoredCandidate, ...],
-    observer: RealTimeObserver,
-) -> tuple[ScoredCandidate, ...]:
-    """Re-weight ScoredCandidates with real-time health multipliers.
-
-    Fetches a single health snapshot for all candidate routing keys, then
-    builds new ScoredCandidate instances with adjusted final_score.
-    Re-sorts by new final_score to maintain correct rank order.
-    """
-    routing_keys = [sc.model.model_id for sc in scored_candidates]
-    snapshot = observer.get_health_snapshot(routing_keys=routing_keys)
-
-    if not snapshot.signals:
-        # No recent data → no adjustment needed, skip re-sort
-        return scored_candidates
-
-    adjusted: list[tuple[float, ScoredCandidate]] = []
-    for sc in scored_candidates:
-        multiplier = snapshot.get_multiplier(sc.model.model_id)
-        if abs(multiplier - 1.0) < 1e-6:
-            adjusted.append((sc.final_score, sc))
-        else:
-            # Apply health to final_score proportionally
-            new_score = sc.final_score * multiplier
-            # Rebuild with updated explanation note
-            updated_explanation = (
-                f"{sc.explanation} [health_mult={multiplier:.2f} → score={new_score:.2f}]"
-            )
-            new_sc = ScoredCandidate(
-                model=sc.model,
-                priority_weight=sc.priority_weight,
-                db_model_id=sc.db_model_id,
-                rank=sc.rank,             # will be fixed after sort
-                quality_score=sc.quality_score,
-                latency_score=sc.latency_score,
-                cost_score=sc.cost_score,
-                final_score=new_score,
-                model_score_adjustment=sc.model_score_adjustment,
-                explanation=updated_explanation,
-                pros=sc.pros,
-                cons=sc.cons,
-                tier=sc.tier,
-                health_status=sc.health_status,
-                snapshot_latency_p50=sc.snapshot_latency_p50,
-                user_rating=sc.user_rating,
-                user_rating_count=sc.user_rating_count,
-            )
-            adjusted.append((new_score, new_sc))
-
-    adjusted.sort(key=lambda x: (-x[0], x[1].model.model_id))
-
-    # Fix rank numbers after re-sort
-    reranked: list[ScoredCandidate] = []
-    for new_rank, (_, sc) in enumerate(adjusted, start=1):
-        reranked.append(
-            ScoredCandidate(
-                model=sc.model,
-                priority_weight=sc.priority_weight,
-                db_model_id=sc.db_model_id,
-                rank=new_rank,
-                quality_score=sc.quality_score,
-                latency_score=sc.latency_score,
-                cost_score=sc.cost_score,
-                final_score=sc.final_score,
-                model_score_adjustment=sc.model_score_adjustment,
-                explanation=sc.explanation,
-                pros=sc.pros,
-                cons=sc.cons,
-                tier=sc.tier,
-                health_status=sc.health_status,
-                snapshot_latency_p50=sc.snapshot_latency_p50,
-                user_rating=sc.user_rating,
-                user_rating_count=sc.user_rating_count,
-            )
-        )
-    return tuple(reranked)
-
-
 class GatewayOrchestrator:
     def __init__(
         self,
         *,
         session: Session,
         model_repository: ModelRepository,
-        fallback_registry,
+        fallback_registry: FallbackModelRegistry,
         prompt_evaluator: PromptEvaluator,
         selector: ModelSelector,
         executor: FallbackExecutor,
@@ -155,7 +80,6 @@ class GatewayOrchestrator:
         self._attempt_repo = AttemptRepository(session)
         self._metrics_repo = MetricsRepository(session)
         self._budget_controller = BudgetController()
-        self._observer = RealTimeObserver(session)
 
     def _maybe_sync_openrouter_catalog(self) -> None:
         settings = get_settings()
@@ -174,7 +98,15 @@ class GatewayOrchestrator:
         models = self.model_repository.list_all_models()
         if models:
             return models
-        return self.fallback_registry.list_models()
+        fallback_models = getattr(self.fallback_registry, "list_models", None)
+        if callable(fallback_models):
+            return cast(list[ModelProfile], fallback_models())
+
+        logger.warning(
+            "Fallback registry %s does not implement list_models(); returning empty catalog",
+            type(self.fallback_registry).__name__,
+        )
+        return []
 
     def execute(self, task: GatewayTask, *, session_id: str | None = None) -> GatewayExecutionResult:
         evaluation = self.prompt_evaluator.evaluate(
@@ -235,29 +167,23 @@ class GatewayOrchestrator:
             require_json=effective_require_json,
         )
 
-        # --- NEW: real-time health re-ranking ---
-        health_adjusted_candidates = _apply_health_to_candidates(
-            decision.scored_candidates,
-            self._observer,
-        )
-
-        # --- NEW: budget filtering ---
+        # Budget filtering (scores already include health+feedback from selector/engine).
         budget_constraint = BudgetConstraint(
             max_estimated_cost_usd=getattr(task, "max_cost_usd", None),
             estimated_input_tokens=evaluation.estimated_tokens,
             estimated_output_tokens=evaluation.estimated_output_tokens,
         )
         budget_filtered = self._budget_controller.filter_candidates(
-            health_adjusted_candidates, budget_constraint
+            decision.scored_candidates, budget_constraint
         )
-        if len(budget_filtered) < len(health_adjusted_candidates):
+        if len(budget_filtered) < len(decision.scored_candidates):
             logger.info(
                 "budget_filter removed %d candidates (limit=%.4f USD)",
-                len(health_adjusted_candidates) - len(budget_filtered),
+                len(decision.scored_candidates) - len(budget_filtered),
                 budget_constraint.max_estimated_cost_usd,
             )
 
-        # Rebuild RoutingDecision with budget-filtered + health-adjusted candidates
+        # Rebuild RoutingDecision with budget-filtered candidates.
         final_decision = RoutingDecision(
             intent=decision.intent,
             reason=decision.reason,
@@ -370,7 +296,7 @@ class GatewayOrchestrator:
         )
 
 
-_ECONOMICAL_COST_SCORE = 4
+_ECONOMICAL_COST_SCORE = 8
 _FREE_ALT_MIN_SCORE_RATIO = 0.72
 
 

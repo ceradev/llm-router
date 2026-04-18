@@ -12,9 +12,9 @@ def list_models() -> list[ModelProfile]:
         ModelProfile(
             model_id="openai/gateway-fast",
             provider=OPENAI_PROVIDER,
-            quality_score=3,
-            latency_score=4,
-            cost_score=3,
+            quality_score=6,
+            latency_score=8,
+            cost_score=6,
             default_temperature=0.3,
             capabilities={
                 Capability.GENERAL,
@@ -24,9 +24,9 @@ def list_models() -> list[ModelProfile]:
         ModelProfile(
             model_id="anthropic/gateway-quality",
             provider=ANTHROPIC_PROVIDER,
-            quality_score=5,
-            latency_score=2,
-            cost_score=1,
+            quality_score=10,
+            latency_score=4,
+            cost_score=2,
             default_temperature=0.2,
             capabilities={
                 Capability.GENERAL,
@@ -36,9 +36,9 @@ def list_models() -> list[ModelProfile]:
         ModelProfile(
             model_id="groq/gateway-low-latency",
             provider=GROQ_PROVIDER,
-            quality_score=2,
-            latency_score=5,
-            cost_score=4,
+            quality_score=4,
+            latency_score=10,
+            cost_score=8,
             default_temperature=0.3,
             capabilities={
                 Capability.GENERAL,
@@ -48,9 +48,9 @@ def list_models() -> list[ModelProfile]:
         ModelProfile(
             model_id="deepseek/gateway-code",
             provider=DEEPSEEK_PROVIDER,
-            quality_score=4,
-            latency_score=3,
-            cost_score=4,
+            quality_score=8,
+            latency_score=6,
+            cost_score=8,
             default_temperature=0.1,
             capabilities={
                 Capability.CODE,
