@@ -60,8 +60,9 @@ def test_low_success_rate_triggers_reliability_penalty() -> None:
     bad = apply_snapshot_adjustments(profile=profile, snapshot=bad_snap)
     assert bad.reliability_penalty > good.reliability_penalty
 
-def test_scores_clamped_between_1_and_5() -> None:
+def test_scores_clamped_between_1_and_10() -> None:
     profile = _profile(latency_score=1)
     snap = _snapshot(p50_latency_ms=5000.0)
     result = apply_snapshot_adjustments(profile=profile, snapshot=snap)
     assert result.latency_score >= 1.0
+    assert result.latency_score <= 10.0

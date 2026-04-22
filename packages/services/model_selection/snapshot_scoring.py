@@ -54,8 +54,8 @@ def apply_snapshot_adjustments(
     if snapshot.success_rate_7d is not None and snapshot.success_rate_7d < 0.90:
         reliability_penalty = (0.90 - snapshot.success_rate_7d) * (1.5 / 0.90)
 
-    adjusted_latency = max(1.0, min(5.0, base_latency + latency_delta))
-    adjusted_cost = max(1.0, min(5.0, base_cost + cost_delta))
+    adjusted_latency = max(1.0, min(10.0, base_latency + latency_delta))
+    adjusted_cost = max(1.0, min(10.0, base_cost + cost_delta))
 
     return SnapshotAdjustedScores(
         latency_score=adjusted_latency,

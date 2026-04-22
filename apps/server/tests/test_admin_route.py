@@ -10,9 +10,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
+from sqlmodel import select
 
 from app.api.dependencies.orchestrator import get_db_session
 from app.api.routes.admin import get_admin_api_key, router as admin_router
+from packages.infrastructure.db.session import request_session_has_pending_writes
 from packages.infrastructure.db.models.daily_metrics import DailyMetrics
 from packages.infrastructure.db.models.llm_attempt import LLMAttempt
 from packages.infrastructure.db.models.llm_execution import LLMExecution
@@ -46,7 +48,17 @@ def admin_client_and_engine() -> Generator[tuple[TestClient, Engine], None, None
 
     def override_get_db() -> Generator[Session, None, None]:
         with Session(engine) as session:
-            yield session
+            try:
+                yield session
+            except Exception:
+                if session.in_transaction():
+                    session.rollback()
+                raise
+            else:
+                if request_session_has_pending_writes(session):
+                    session.commit()
+                elif session.in_transaction():
+                    session.rollback()
 
     app = FastAPI()
     app.include_router(admin_router)
@@ -237,6 +249,12 @@ def test_admin_model_evaluate_returns_structured_payload(
     assert isinstance(body["benchmark_run_id"], int)
     assert body["benchmark_scope"] in {"text", "image_to_text"}
     assert isinstance(body["cases"], list)
+
+    with Session(engine) as session:
+        persisted_run = session.exec(
+            select(ModelBenchmarkRun).where(ModelBenchmarkRun.id == body["benchmark_run_id"])
+        ).first()
+        assert persisted_run is not None
 
 
 def test_admin_model_batch_evaluate_with_filters(

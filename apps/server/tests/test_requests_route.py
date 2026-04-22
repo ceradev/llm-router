@@ -8,8 +8,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
+from sqlmodel import select
 
 from app.api.dependencies.orchestrator import get_db_session
+from packages.infrastructure.db.session import request_session_has_pending_writes
 from app.api.routes.requests import router as requests_router
 from packages.infrastructure.db.models.llm_attempt import LLMAttempt
 from packages.infrastructure.db.models.llm_execution import LLMExecution
@@ -39,7 +41,17 @@ def requests_client_and_engine() -> Generator[tuple[TestClient, Engine], None, N
 
     def override_get_db() -> Generator[Session, None, None]:
         with Session(engine) as session:
-            yield session
+            try:
+                yield session
+            except Exception:
+                if session.in_transaction():
+                    session.rollback()
+                raise
+            else:
+                if request_session_has_pending_writes(session):
+                    session.commit()
+                elif session.in_transaction():
+                    session.rollback()
 
     app = FastAPI()
     app.include_router(requests_router)
@@ -221,6 +233,13 @@ def test_post_feedback_201(
     assert body["comment"] == "great"
     assert body["request_id"] == rid
     assert body["model_id"] == mid
+
+    with Session(engine) as session:
+        saved_feedback = list(session.exec(select(LLMFeedback)).all())
+        assert len(saved_feedback) == 1
+        assert saved_feedback[0].request_id == req.id
+        assert saved_feedback[0].model_id == mid
+        assert saved_feedback[0].rating == 5
 
 
 def test_post_feedback_400_without_selected_model(

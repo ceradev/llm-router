@@ -19,6 +19,7 @@ class LLMModelRoutingSettings(TimestampMixin, Base, table=True):
         foreign_key="llm_models.id",
         unique=True,
     )
+    # 1–10 = stronger/better on that axis; 0 = not curated yet (OpenRouter sync default).
     quality_score: int = Field(default=0)
     latency_score: int = Field(default=0)
     cost_score: int = Field(default=0)

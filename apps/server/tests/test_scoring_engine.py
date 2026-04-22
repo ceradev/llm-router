@@ -2,30 +2,39 @@ from __future__ import annotations
 
 import pytest
 
-from packages.core.scoring.engine import compute_model_score
+from packages.core.scoring.engine import (
+    CapabilityRoutingConfig,
+    adjust_score_with_capability,
+    apply_gap_decision,
+    compute_model_score,
+    should_apply_low_tier_penalty,
+)
 from packages.domain.gateway import Priority
 from packages.domain.models import Capability, ModelProfile
 
 
+def _profile(**overrides: object) -> ModelProfile:
+    base: dict[str, object] = {
+        "model_id": "openai/test",
+        "provider": "openai",
+        "quality_score": 6,
+        "latency_score": 6,
+        "cost_score": 6,
+        "default_temperature": 0.2,
+        "capabilities": {Capability.GENERAL},
+        "supports_tools": False,
+        "context_window": 8192,
+        "prompt_price": 0.000002,
+        "completion_price": 0.000006,
+        "evaluation_status": "verified",
+    }
+    base.update(overrides)
+    return ModelProfile(**base)  # type: ignore[arg-type]
+
+
 def test_compute_model_score_prefers_higher_total() -> None:
-    low = ModelProfile(
-        model_id="p/low",
-        provider="p",
-        quality_score=1,
-        latency_score=1,
-        cost_score=1,
-        default_temperature=0.2,
-        capabilities={Capability.GENERAL},
-    )
-    high = ModelProfile(
-        model_id="p/high",
-        provider="p",
-        quality_score=5,
-        latency_score=5,
-        cost_score=5,
-        default_temperature=0.2,
-        capabilities={Capability.GENERAL},
-    )
+    low = _profile(model_id="p/low", quality_score=1, latency_score=1, cost_score=1)
+    high = _profile(model_id="p/high", quality_score=10, latency_score=10, cost_score=10)
 
     low_score = compute_model_score(model=low, priority=Priority.BALANCED, priority_weight=100).total
     high_score = compute_model_score(model=high, priority=Priority.BALANCED, priority_weight=100).total
@@ -33,147 +42,167 @@ def test_compute_model_score_prefers_higher_total() -> None:
     assert high_score > low_score
 
 
-def test_compute_model_score_includes_priority_weight() -> None:
-    base = ModelProfile(
-        model_id="p/m",
-        provider="p",
-        quality_score=3,
-        latency_score=3,
-        cost_score=3,
-        default_temperature=0.2,
-        capabilities={Capability.GENERAL},
-    )
+def test_context_score_is_monotonic_with_context_window() -> None:
+    small_ctx = _profile(model_id="ctx/small", context_window=4096)
+    large_ctx = _profile(model_id="ctx/large", context_window=32768)
 
-    low = compute_model_score(model=base, priority=Priority.BALANCED, priority_weight=50).total
-    high = compute_model_score(model=base, priority=Priority.BALANCED, priority_weight=150).total
-
-    assert high > low
-
-
-def _base_profile(**kwargs: object) -> ModelProfile:
-    defaults: dict[str, object] = {
-        "model_id": "openai/gpt-test",
-        "provider": "openai",
-        "quality_score": 3,
-        "latency_score": 3,
-        "cost_score": 3,
-        "default_temperature": 0.2,
-        "capabilities": {Capability.GENERAL},
-        "supports_tools": False,
-    }
-    defaults.update(kwargs)
-    return ModelProfile(**defaults)  # type: ignore[arg-type]
-
-
-def test_use_case_api_boosts_json_model() -> None:
-    without_json = _base_profile(capabilities={Capability.GENERAL})
-    with_json = _base_profile(capabilities={Capability.GENERAL, Capability.JSON})
-
-    base_kw = dict(priority=Priority.BALANCED, priority_weight=100)
-    no_uc = compute_model_score(model=with_json, **base_kw).total
-    with_uc = compute_model_score(
-        model=with_json,
-        **base_kw,
-        use_cases=["api"],
-    ).total
-    no_uc_plain = compute_model_score(model=without_json, **base_kw, use_cases=["api"]).total
-
-    assert with_uc > no_uc
-    assert with_uc > no_uc_plain
-
-
-def test_preferred_provider_bonus() -> None:
-    anthropic_model = _base_profile(model_id="anthropic/claude", provider="anthropic")
-    openai_model = _base_profile(model_id="openai/gpt", provider="openai")
-
-    kw = dict(priority=Priority.BALANCED, priority_weight=100)
-    pref_anth = compute_model_score(
-        model=anthropic_model,
-        **kw,
-        preferred_providers=["anthropic"],
-    ).total
-    pref_anth_openai = compute_model_score(
-        model=openai_model,
-        **kw,
-        preferred_providers=["anthropic"],
-    ).total
-    assert pref_anth > pref_anth_openai
-    assert compute_model_score(model=openai_model, **kw).total == pref_anth_openai
-
-
-def test_chatbot_use_case_adjusts_latency_weighting() -> None:
-    slower = _base_profile(model_id="m/slow", latency_score=2)
-    faster = _base_profile(model_id="m/fast", latency_score=5)
-
-    kw = dict(priority=Priority.BALANCED, priority_weight=100)
-    with_chat = compute_model_score(model=faster, **kw, use_cases=["chatbot"])
-    without = compute_model_score(model=faster, **kw)
-    assert with_chat.latency_component != without.latency_component
-    assert (
-        compute_model_score(model=faster, **kw, use_cases=["chatbot"]).total
-        > compute_model_score(model=slower, **kw, use_cases=["chatbot"]).total
-    )
-
-
-def test_verified_confidence_bonus_prefers_verified_when_scores_equal() -> None:
-    verified = _base_profile(model_id="m/verified", evaluation_status="verified")
-    provisional = _base_profile(model_id="m/provisional", evaluation_status="provisional")
-
-    kw = dict(priority=Priority.BALANCED, priority_weight=100)
-    verified_score = compute_model_score(model=verified, **kw).total
-    provisional_score = compute_model_score(model=provisional, **kw).total
-
-    assert verified_score > provisional_score
-
-
-def test_feedback_adjustment_not_applied_below_minimum_ratings() -> None:
-    base = _base_profile()
-    without_feedback = compute_model_score(
-        model=base,
+    small = compute_model_score(
+        model=small_ctx,
         priority=Priority.BALANCED,
         priority_weight=100,
+        prompt_tokens=3000,
     )
-    below_threshold = compute_model_score(
-        model=base,
+    large = compute_model_score(
+        model=large_ctx,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        prompt_tokens=3000,
+    )
+    assert large.context_score >= small.context_score
+
+
+def test_feedback_factor_is_bounded_and_stable_for_small_n() -> None:
+    model = _profile()
+    base = compute_model_score(model=model, priority=Priority.BALANCED, priority_weight=100)
+    tiny_sample = compute_model_score(
+        model=model,
         priority=Priority.BALANCED,
         priority_weight=100,
         avg_rating=5.0,
-        ratings_count=4,
+        ratings_count=1,
     )
-    assert below_threshold.total == pytest.approx(without_feedback.total)
-    assert below_threshold.model_score_adjustment == pytest.approx(0.0)
+    assert tiny_sample.feedback_effective <= 1.05
+    assert tiny_sample.total - base.total < 0.1
 
 
-def test_feedback_adjustment_applies_formula_after_threshold() -> None:
-    base = _base_profile()
+def test_no_score_collapse_low_values() -> None:
+    weak = _profile(model_id="m/weak", quality_score=1, latency_score=1, cost_score=1, context_window=4096)
+    weak_plus = _profile(model_id="m/weak-plus", quality_score=1, latency_score=2, cost_score=1, context_window=4096)
+    s1 = compute_model_score(
+        model=weak,
+        priority=Priority.BALANCED,
+        priority_weight=50,
+        prompt_tokens=3500,
+    )
+    s2 = compute_model_score(
+        model=weak_plus,
+        priority=Priority.BALANCED,
+        priority_weight=50,
+        prompt_tokens=3500,
+    )
+    assert s2.total > s1.total
+    assert abs(s2.total - s1.total) > 1e-6
+
+
+def test_complexity_increases_capability_influence() -> None:
+    model = _profile(
+        model_id="cap/high-complexity",
+        tier="premium",
+        capabilities={Capability.GENERAL, Capability.CODE, Capability.ANALYSIS},
+        evaluation_status="verified",
+    )
+    low_complexity = compute_model_score(
+        model=model,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        complexity_score=0.2,
+        requires_reasoning=True,
+        capability_score=0.86,
+    )
+    high_complexity = compute_model_score(
+        model=model,
+        priority=Priority.BALANCED,
+        priority_weight=100,
+        complexity_score=0.9,
+        requires_reasoning=True,
+        capability_score=0.86,
+    )
+    assert high_complexity.capability_adjustment > low_complexity.capability_adjustment
+
+
+def test_low_tier_overperformance_gets_penalized() -> None:
+    budget_model = _profile(
+        model_id="budget/model",
+        tier="budget",
+        evaluation_status="cataloged",
+    )
+    _score, budget_adjustment, _confidence = adjust_score_with_capability(
+        model=budget_model,
+        current_score=1.92,
+        capability_score=0.40,
+        reasoning_score=0.85,
+        complexity_score=0.4,
+    )
+    assert budget_adjustment < 0.0
+
+
+def test_gap_decision_prefers_higher_capability_when_scores_are_close() -> None:
+    ordered = apply_gap_decision(
+        ranked_items=[
+            (1.02, 0.55, 0.80, "budget/model"),
+            (1.01, 0.90, 1.00, "premium/model"),
+        ],
+        gap_threshold=0.02,
+    )
+    assert ordered[0] == "premium/model"
+
+
+def test_low_tier_penalty_requires_low_confidence() -> None:
+    model = _profile(model_id="budget/penalty-check", tier="budget")
+    cfg = CapabilityRoutingConfig()
+    should_penalize = should_apply_low_tier_penalty(
+        model=model,
+        score=0.9,
+        expected=0.5,
+        confidence=0.6,
+        config=cfg,
+    )
+    should_not_penalize = should_apply_low_tier_penalty(
+        model=model,
+        score=0.9,
+        expected=0.5,
+        confidence=0.95,
+        config=cfg,
+    )
+    assert should_penalize is True
+    assert should_not_penalize is False
+
+
+def test_capability_total_delta_is_capped() -> None:
+    model = _profile(
+        model_id="cap/cap-check",
+        tier="premium",
+        evaluation_status="verified",
+    )
     scored = compute_model_score(
-        model=base,
+        model=model,
         priority=Priority.BALANCED,
         priority_weight=100,
-        avg_rating=4.5,
-        ratings_count=7,
+        complexity_score=1.0,
+        requires_reasoning=True,
+        capability_score=1.0,
     )
-    expected_factor = 4.5 / 3.0
-    assert scored.total == pytest.approx(scored.base_total * expected_factor)
-    assert scored.model_score_adjustment == pytest.approx(scored.adjusted_total - scored.base_total)
+    assert abs(scored.capability_prior + scored.capability_adjustment) <= 0.100001
 
 
-def test_feedback_adjustment_penalizes_and_boosts() -> None:
-    base = _base_profile()
-    penalized = compute_model_score(
-        model=base,
+def test_capability_reason_is_set() -> None:
+    model = _profile(
+        model_id="cap/reason",
+        tier="budget",
+        evaluation_status="cataloged",
+    )
+    scored = compute_model_score(
+        model=model,
         priority=Priority.BALANCED,
         priority_weight=100,
-        avg_rating=2.0,
-        ratings_count=6,
+        complexity_score=0.9,
+        requires_reasoning=True,
+        capability_score=0.35,
     )
-    boosted = compute_model_score(
-        model=base,
-        priority=Priority.BALANCED,
-        priority_weight=100,
-        avg_rating=4.0,
-        ratings_count=6,
-    )
-    assert penalized.total < penalized.base_total
-    assert boosted.total > boosted.base_total
+    assert scored.capability_reason in {
+        "premium_near_tie_boost",
+        "low_confidence_penalty",
+        "complexity_boost",
+        "none",
+    }
 

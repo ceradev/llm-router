@@ -122,7 +122,7 @@ class TestOrchestratorIntegration:
         assert len(passed_decision.scored_candidates) == 1
         assert passed_decision.scored_candidates[0].model.model_id == "cheap"
 
-    def test_health_reranking_integration(self, mock_deps):
+    def test_orchestrator_does_not_rescore_candidates(self, mock_deps):
         orchestrator, prompt_evaluator, selector, executor = mock_deps
         
         task = GatewayTask(
@@ -156,23 +156,11 @@ class TestOrchestratorIntegration:
         decision.candidates = [model_a, model_b]
         selector.build_decision.return_value = decision
         
-        # Mock observer to report A is unhealthy
-        orchestrator._observer = MagicMock()
-        snapshot = MagicMock()
-        # model-a gets 0.3 multiplier -> 1.0 * 0.3 = 0.3
-        # model-b gets 1.0 multiplier -> 0.9 * 1.0 = 0.9
-        snapshot.get_multiplier.side_effect = lambda k: 0.3 if k == "model-a" else 1.0
-        snapshot.signals = {"model-a": MagicMock()}
-        orchestrator._observer.get_health_snapshot.return_value = snapshot
-        
         executor.run.return_value = MagicMock()
-        executor.run.return_value.response.model_id = "model-b"
+        executor.run.return_value.response.model_id = "model-a"
         
         orchestrator.execute(task)
         
         passed_decision = executor.run.call_args.kwargs["decision"]
-        # Now B should be rank 1
-        assert passed_decision.scored_candidates[0].model.model_id == "model-b"
-        assert passed_decision.scored_candidates[1].model.model_id == "model-a"
-        assert passed_decision.scored_candidates[0].rank == 1
-        assert passed_decision.scored_candidates[1].rank == 2
+        assert passed_decision.scored_candidates[0].model.model_id == "model-a"
+        assert passed_decision.scored_candidates[1].model.model_id == "model-b"

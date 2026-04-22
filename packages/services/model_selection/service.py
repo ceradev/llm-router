@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from packages.core.scoring.engine import ScoreBreakdown, compute_model_score
+import math
+
+from packages.core.scoring.engine import ScoreBreakdown, apply_gap_decision, compute_model_score
 from packages.domain.gateway import (
     GatewayTask,
     HealthState,
@@ -19,22 +21,22 @@ from packages.infrastructure.db.repositories.model_repository import (
     ModelRoutingRow,
 )
 from packages.infrastructure.db.repositories.snapshot_repository import SnapshotRepository
-from packages.services.model_selection.snapshot_scoring import apply_snapshot_adjustments
 from packages.services.prompt_evaluation.types import PromptEvaluationResult
+from packages.services.real_time_observer import RealTimeObserver
 
 
 def _pros_cons_for(*, model: ModelProfile, priority: Priority) -> tuple[tuple[str, ...], tuple[str, ...]]:
     pros: list[str] = []
     cons: list[str] = []
-    if model.quality_score >= 4:
+    if model.quality_score >= 8:
         pros.append("strong_quality_profile")
-    elif model.quality_score <= 2:
+    elif model.quality_score <= 3:
         cons.append("limited_quality_profile")
-    if model.latency_score >= 4:
+    if model.latency_score >= 8:
         pros.append("low_latency_profile")
-    if model.cost_score >= 4:
+    if model.cost_score >= 8:
         pros.append("economical_profile")
-    if priority == Priority.LOW_COST and model.cost_score < 3:
+    if priority == Priority.LOW_COST and model.cost_score < 6:
         cons.append("higher_cost_for_low_cost_priority")
     return (tuple(pros), tuple(cons))
 
@@ -69,6 +71,7 @@ class ModelSelector:
             task=task,
             rows_with_tiers=db_rows_with_tiers,
             priority=task.priority,
+            intent=intent,
             evaluation=evaluation,
         )
 
@@ -141,51 +144,57 @@ class ModelSelector:
         task: GatewayTask,
         rows_with_tiers: list[tuple[ModelRoutingRow, ModelTier]],
         priority: Priority,
+        intent: Intent,
         evaluation: PromptEvaluationResult,
     ) -> tuple[list[ModelProfile], tuple[ScoredCandidate, ...], dict[str, ScoreBreakdown]]:
-        scored: list[tuple[float, ModelProfile, ModelRoutingRow, ModelTier, ScoreBreakdown, float | None]] = []
+        scored: list[
+            tuple[
+                float,
+                ModelProfile,
+                ModelRoutingRow,
+                ModelTier,
+                ScoreBreakdown,
+                float | None,
+                float | None,
+            ]
+        ] = []
         model_ids = [row.db_model_id for row, _ in rows_with_tiers]
         feedback_stats: dict[int, tuple[float | None, int]] = {}
         session = getattr(self.model_repository, "session", None)
         if session is not None:
             feedback_stats = FeedbackRepository(session).get_feedback_stats_by_model_ids(model_ids=model_ids)
-        
+
+        routing_keys = [row.model.model_id for row, _ in rows_with_tiers]
+        realtime_snapshot = None
+        if session is not None:
+            realtime_snapshot = RealTimeObserver(session).get_health_snapshot(routing_keys=routing_keys)
+        total_attempts = (
+            sum(signal.attempt_count for signal in realtime_snapshot.signals.values())
+            if realtime_snapshot is not None
+            else 0
+        )
+
         for row, tier in rows_with_tiers:
             avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
-            
-            # Apply snapshot adjustments if repository available
+
             snapshot = None
             if self.snapshot_repository:
                 snapshot = self.snapshot_repository.get_latest_snapshot(model_id=row.db_model_id)
-            
-            adjustments = apply_snapshot_adjustments(profile=row.model, snapshot=snapshot)
-            
-            # Create adjusted profile for scoring
-            adjusted_profile = ModelProfile(
-                model_id=row.model.model_id,
-                provider=row.model.provider,
-                quality_score=row.model.quality_score,
-                latency_score=int(adjustments.latency_score),
-                cost_score=int(adjustments.cost_score),
-                default_temperature=row.model.default_temperature,
-                capabilities=row.model.capabilities,
-                model_categories=row.model.model_categories,
-                technical_capabilities=row.model.technical_capabilities,
-                verification_scopes=row.model.verification_scopes,
-                supports_tools=row.model.supports_tools,
-                context_window=row.model.context_window,
-                max_output_tokens=row.model.max_output_tokens,
-                tier=row.model.tier,
-                evaluation_status=row.model.evaluation_status,
-                supports_vision=row.model.supports_vision,
-                input_modalities=row.model.input_modalities,
-                output_modalities=row.model.output_modalities,
-                prompt_price=row.model.prompt_price,
-                completion_price=row.model.completion_price,
+
+            signal = realtime_snapshot.signals.get(row.model.model_id) if realtime_snapshot else None
+            observed_latency_ms = snapshot.p50_latency_ms if snapshot and snapshot.p50_latency_ms is not None else None
+            observed_cost_per_1k = (
+                snapshot.avg_cost_per_1k_tokens
+                if snapshot and snapshot.avg_cost_per_1k_tokens is not None
+                else None
             )
+            failure_rate = signal.failure_rate if signal else 0.0
+            avg_latency_ms = signal.avg_latency_ms if signal and signal.avg_latency_ms is not None else observed_latency_ms
+            health_multiplier = signal.health_multiplier if signal else 1.0
+            model_attempts = signal.attempt_count if signal else 0
 
             breakdown = compute_model_score(
-                model=adjusted_profile,
+                model=row.model,
                 priority=priority,
                 priority_weight=row.priority_weight,
                 complexity_score=evaluation.complexity_score,
@@ -196,28 +205,79 @@ class ModelSelector:
                 preferred_providers=task.preferred_providers,
                 avg_rating=avg_rating,
                 ratings_count=ratings_count,
+                intent=intent,
+                health_multiplier=health_multiplier,
+                failure_rate=failure_rate,
+                avg_latency_ms=avg_latency_ms,
+                observed_latency_ms=observed_latency_ms,
+                observed_cost_per_1k_tokens=observed_cost_per_1k,
+                prompt_tokens=evaluation.estimated_tokens,
+                exploration_enabled=task.discovery_mode,
+                model_attempts=model_attempts,
+                total_attempts=total_attempts,
             )
-            # Add reliability penalty if snapshot was used
-            final_total = breakdown.total - adjustments.reliability_penalty
-            
+            final_total = breakdown.total
+
             scored.append((
-                final_total, 
-                row.model, 
-                row, 
-                tier, 
-                breakdown, 
-                snapshot.p50_latency_ms if snapshot else None
+                final_total,
+                row.model,
+                row,
+                tier,
+                breakdown,
+                snapshot.p50_latency_ms if snapshot else None,
+                observed_cost_per_1k,
             ))
 
-        scored.sort(key=lambda item: (-item[0], item[1].model_id))
-        candidates = [model for _, model, _, _, _, _ in scored]
-        score_breakdowns = {model.model_id: breakdown for _, model, _, _, breakdown, _ in scored}
+        def _tie_key(
+            item: tuple[float, ModelProfile, ModelRoutingRow, ModelTier, ScoreBreakdown, float | None, float | None],
+        ) -> tuple[float, float, float, float, float, float, str]:
+            total_score, model, _row, _tier, breakdown, latency_ms, cost_per_1k = item
+            return (
+                -total_score,
+                -breakdown.health_multiplier,
+                -breakdown.context_headroom,
+                float(latency_ms) if latency_ms is not None else math.inf,
+                float(cost_per_1k) if cost_per_1k is not None else math.inf,
+                -breakdown.capability_score,
+                model.model_id,
+            )
+
+        best_by_model_id: dict[str, tuple[float, ModelProfile, ModelRoutingRow, ModelTier, ScoreBreakdown, float | None, float | None]] = {}
+        for item in scored:
+            model_id = item[1].model_id
+            current = best_by_model_id.get(model_id)
+            if current is None or _tie_key(item) < _tie_key(current):
+                best_by_model_id[model_id] = item
+
+        deduped = list(best_by_model_id.values())
+        deduped.sort(key=_tie_key)
+        gap_order = apply_gap_decision(
+            ranked_items=[
+                (
+                    total_score,
+                    breakdown.capability_score,
+                    breakdown.capability_confidence,
+                    model.model_id,
+                )
+                for total_score, model, _row, _tier, breakdown, _latency_ms, _cost_per_1k in deduped
+            ]
+        )
+        gap_rank = {model_id: idx for idx, model_id in enumerate(gap_order)}
+        deduped.sort(
+            key=lambda item: (
+                gap_rank.get(item[1].model_id, len(gap_rank)),
+                *_tie_key(item),
+            )
+        )
+
+        candidates = [model for _, model, _, _, _, _, _ in deduped]
+        score_breakdowns = {model.model_id: breakdown for _, model, _, _, breakdown, _, _ in deduped}
 
         scored_candidates: list[ScoredCandidate] = []
-        for rank, (total_score, model, row, tier, breakdown, p50) in enumerate(scored, start=1):
+        for rank, (total_score, model, row, tier, breakdown, p50, _cost_per_1k) in enumerate(deduped, start=1):
             avg_rating, ratings_count = feedback_stats.get(row.db_model_id, (None, 0))
             pros, cons = _pros_cons_for(model=model, priority=priority)
-            
+
             health_status = HealthState.HEALTHY
             if self.health_repository:
                 health_status = self.health_repository.get_status(model_id=row.db_model_id)
@@ -228,9 +288,9 @@ class ModelSelector:
                     priority_weight=row.priority_weight,
                     db_model_id=row.db_model_id,
                     rank=rank,
-                    quality_score=float(model.quality_score),
-                    latency_score=float(model.latency_score),
-                    cost_score=float(model.cost_score),
+                    quality_score=float(breakdown.reasoning_score),
+                    latency_score=float(breakdown.latency_score),
+                    cost_score=float(breakdown.cost_score),
                     final_score=total_score,
                     model_score_adjustment=breakdown.model_score_adjustment,
                     explanation=breakdown.explanation,

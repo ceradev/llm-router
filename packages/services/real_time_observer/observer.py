@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlmodel import Session, select, func, text
+from sqlalchemy import Integer
+from sqlmodel import Session, select, func
 
 from packages.infrastructure.db.models.llm_attempt import LLMAttempt
 from packages.services.real_time_observer.types import ModelHealthSignal, RealTimeHealthSnapshot
@@ -50,7 +51,7 @@ class RealTimeObserver:
                 func.count().label("total"),
                 func.sum(
                     # Map status to 1/0 for failure counting
-                    func.cast(LLMAttempt.status != "success", type_=None)
+                    func.cast(LLMAttempt.status != "success", Integer)
                 ).label("failures"),
                 func.avg(LLMAttempt.latency_ms).label("avg_latency"),
             )

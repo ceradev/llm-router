@@ -18,7 +18,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from sqlmodel import Session, select
 
-from packages.core.openrouter.pricing import compute_cost_score
+from packages.core.openrouter.pricing import compute_cost_score_from_avg_usd
 from packages.infrastructure.config.settings import get_settings
 from packages.infrastructure.db.models.llm_model import LLMModel, ModelEvaluationStatus
 from packages.infrastructure.db.models.llm_model_routing_settings import LLMModelRoutingSettings
@@ -102,15 +102,16 @@ def openrouter_api_model_id(model: LLMModel) -> str:
 
 
 def _latency_score_from_ms(ms: float) -> int:
+    """1–10 routing score (10 = fastest)."""
     if ms <= 1_500:
-        return 5
+        return 10
     if ms <= 4_000:
-        return 4
+        return 8
     if ms <= 10_000:
-        return 3
+        return 6
     if ms <= 20_000:
-        return 2
-    return 1
+        return 4
+    return 2
 
 
 def _estimate_cost_usd(*, model: LLMModel, inp: int, out: int) -> float:
@@ -403,13 +404,13 @@ class LiveModelBenchmarkService:
 
         costs = [c.cost_usd for c in cases]
         avg_cost = sum(costs) / len(costs) if costs else 0.0
-        cost_score = compute_cost_score(avg_cost)
+        cost_score = compute_cost_score_from_avg_usd(avg_cost)
 
         json_ok = all(c.ok for c in cases if c.case_id == "json_structured") or not model.supports_json
         tool_ok = all(c.ok for c in cases if c.case_id == "tool_call") or not model.supports_tools
-        quality_score = 5 if passed else max(1, 5 - 2 * len(failed))
+        quality_score = 10 if passed else max(1, 10 - 4 * len(failed))
         aggregate = LiveAggregate(
-            quality_score=min(5, quality_score),
+            quality_score=min(10, quality_score),
             latency_score=latency_score,
             cost_score=cost_score,
             json_reliability=1.0 if json_ok else 0.2,

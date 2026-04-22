@@ -1,6 +1,7 @@
 import type { Priority } from "@/features/landing/types"
 import type {
   CategoryPick,
+  DecisionMetricKey,
   ModelDecision,
   ResultsDecisionPayload,
   ResultsRoutingInfo,
@@ -197,9 +198,55 @@ export function buildProvidersBanner(
 }
 
 export function buildBenchmarkModels(payload: ResultsDecisionPayload): ModelDecision[] {
-  return uniqueBenchmarkModels([
+  const models = uniqueBenchmarkModels([
     payload.topPick,
     ...(payload.freeAlternative ? [payload.freeAlternative] : []),
     ...payload.categoryPicks.map((c) => c.model),
   ])
+
+  return rebalanceBenchmarkMetrics(models)
+}
+
+function clamp01to100(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(100, value))
+}
+
+function spreadMetricForComparison(
+  models: ModelDecision[],
+  key: Extract<DecisionMetricKey, "reasoning" | "speed" | "costEfficiency">,
+): ModelDecision[] {
+  const values = models.map((m) => clamp01to100(m.metrics?.[key] ?? 0))
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min
+
+  return models.map((model, idx) => {
+    const value = values[idx]
+    let normalized: number
+    if (range <= 0.01) {
+      // Avoid "all 100" rows that look fake when backend scores are tied.
+      normalized = 70
+    } else if (range < 5) {
+      normalized = 60 + ((value - min) / range) * 20
+    } else {
+      normalized = 25 + ((value - min) / range) * 70
+    }
+
+    return {
+      ...model,
+      metrics: {
+        ...model.metrics,
+        [key]: clamp01to100(Math.round(normalized)),
+      },
+    }
+  })
+}
+
+function rebalanceBenchmarkMetrics(models: ModelDecision[]): ModelDecision[] {
+  let adjusted = [...models]
+  adjusted = spreadMetricForComparison(adjusted, "reasoning")
+  adjusted = spreadMetricForComparison(adjusted, "speed")
+  adjusted = spreadMetricForComparison(adjusted, "costEfficiency")
+  return adjusted
 }

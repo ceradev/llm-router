@@ -28,14 +28,27 @@ function formatProvider(modelId: string): string {
   return map[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1)
 }
 
+function toTenPointScale(score: number): number {
+  if (!Number.isFinite(score)) return 1
+  // Backend sub-scores may arrive normalized (0..1) or already as catalog-like (1..10).
+  if (score >= 0 && score <= 1) {
+    return Math.max(1, Math.min(10, score * 10))
+  }
+  return Math.max(1, Math.min(10, score))
+}
+
 function scoreToPercent(score: number): number {
-  return Math.round((score / 5) * 100)
+  return Math.round((toTenPointScale(score) / 10) * 100)
 }
 
 function finalScoreToTen(score: number): number {
   if (!Number.isFinite(score)) return 1
-  const clamped = Math.max(1, Math.min(10, score))
-  return Math.round(clamped * 10) / 10
+  // Backend composite score is an internal utility (typically 0..2).
+  // Map that utility to a UX-friendly 1..10 display scale.
+  if (score >= 0 && score <= 2.2) {
+    return Math.round(Math.max(1, Math.min(10, score * 5)) * 10) / 10
+  }
+  return Math.round(Math.max(1, Math.min(10, score)) * 10) / 10
 }
 
 /** Map catalog context size to chart bar 0–100 when we have token counts. */
@@ -67,10 +80,11 @@ function toModelDecision(
   const ctx = rankItem.context_window ?? undefined
   const maxOut = rankItem.max_output_tokens ?? null
   const caps = rankItem.capabilities ?? []
+  const costScoreTen = toTenPointScale(rankItem.cost_score)
   let costRel: "low" | "medium" | "high" = "high"
-  if (rankItem.cost_score >= 4) {
+  if (costScoreTen >= 7.5) {
     costRel = "low"
-  } else if (rankItem.cost_score >= 3) {
+  } else if (costScoreTen >= 5) {
     costRel = "medium"
   }
   const whyRouting = options.isTop ? options.why : []

@@ -99,17 +99,17 @@ def compute_deterministic_scores(model: LLMModel) -> ComputedBenchmarkScores:
     cost_score = compute_cost_score(_total_price(model))
     tier = (model.tier or "alternative").strip().lower()
     if tier == "premium":
-        quality_score = 5
-        latency_score = 3
+        quality_score = 10
+        latency_score = 6
     elif tier == "free":
-        quality_score = 2
-        latency_score = 4
+        quality_score = 4
+        latency_score = 8
     else:
-        quality_score = 3
-        latency_score = 4
+        quality_score = 6
+        latency_score = 8
 
     if model.context_window is not None and model.context_window >= 100_000:
-        quality_score = min(5, quality_score + 1)
+        quality_score = min(10, quality_score + 2)
 
     json_reliability = 1.0 if model.supports_json else 0.4
     tool_reliability = 1.0 if model.supports_tools else 0.6
@@ -125,11 +125,11 @@ def compute_deterministic_scores(model: LLMModel) -> ComputedBenchmarkScores:
 
 
 def passes_minimum_thresholds(scores: ComputedBenchmarkScores) -> bool:
-    """v1 gate: integer routing scores 1–5 and tolerances on reliability."""
+    """v1 gate: integer routing scores 1–10 and tolerances on reliability."""
 
     if scores.error_rate > 0.05:
         return False
-    if scores.quality_score < 2 or scores.latency_score < 2 or scores.cost_score < 2:
+    if scores.quality_score < 4 or scores.latency_score < 4 or scores.cost_score < 4:
         return False
     if scores.json_reliability < 0.35 or scores.tool_reliability < 0.35:
         return False
